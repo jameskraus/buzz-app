@@ -535,3 +535,274 @@ it("keeps the last public name for a retained identity when its community read f
     }),
   ).toBeNull();
 });
+
+it("loads public names and pictures for discovered and importable identities without replacing saved artwork", async () => {
+  const relayOnly = keypair(),
+    importable = keypair();
+  const artwork = "https://images.example/saved.png";
+  const events = [relayOnly, importable].map((key, index) =>
+    signed(key, {
+      kind: 0,
+      tags: [],
+      content: JSON.stringify({
+        name: index ? "Public importable" : "Public relay agent",
+        picture: `https://images.example/${index}.png`,
+      }),
+    }),
+  );
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const query = vi.fn<ReadTransport["query"]>(async (filters) => {
+    if (!filters.some((filter) => filter.kinds?.includes(0))) return [];
+    await gate;
+    return events.filter((event) =>
+      filters.some((filter) => filter.authors?.includes(event.pubkey)),
+    );
+  });
+  setup(
+    "ready",
+    (fixture) => {
+      fixture.data.agents = [];
+      fixture.data.parked = [
+        {
+          pubkey: importable.pubkey,
+          name: "Saved importable",
+          sources: ["installed"],
+        },
+      ];
+    },
+    [relayOnly.pubkey],
+    [],
+    undefined,
+    {
+      query,
+      media: (url) => url,
+      readAgentLibrary: async () => ({
+        definitions: [],
+        identities: [
+          {
+            pubkey: "ab".repeat(32),
+            name: "Saved artwork",
+            avatar: artwork,
+          },
+        ],
+      }),
+    },
+  );
+  try {
+    await screen.findByRole("article", {
+      name: `Agent ${relayOnly.pubkey.slice(0, 12)}`,
+    });
+    await waitFor(() =>
+      expect(
+        query.mock.calls.some(([filters]) =>
+          filters.some((filter) => filter.kinds?.includes(0)),
+        ),
+      ).toBe(true),
+    );
+    await act(async () => {
+      release();
+    });
+    const relayCard = await screen.findByRole("article", {
+      name: "Agent Public relay agent",
+    });
+    expect(relayCard.querySelector("img")).toHaveAttribute(
+      "src",
+      "https://images.example/0.png",
+    );
+    expect(
+      within(relayCard).queryByRole("button", { name: "Import" }),
+    ).toBeNull();
+    const importCard = await screen.findByRole("article", {
+      name: "Agent Public importable",
+    });
+    expect(importCard.querySelector("img")).toHaveAttribute(
+      "src",
+      "https://images.example/1.png",
+    );
+    expect(
+      within(importCard).getByRole("button", { name: "Import" }),
+    ).toBeEnabled();
+    expect(
+      (
+        await screen.findByRole("article", { name: "Agent Saved artwork" })
+      ).querySelector("img"),
+    ).toHaveAttribute("src", artwork);
+  } finally {
+    release();
+  }
+});
+
+it("keeps discovery visible when public profiles fail and retries from Refresh agents", async () => {
+  const agent = keypair();
+  const profile = signed(agent, {
+    kind: 0,
+    tags: [],
+    content: '{"name":"Recovered profile"}',
+  });
+  let failed = true;
+  const query = vi.fn<ReadTransport["query"]>(async (filters) => {
+    if (!filters.some((filter) => filter.kinds?.includes(0))) return [];
+    if (failed) throw new Error("Profile unavailable");
+    return [profile];
+  });
+  setup(
+    "ready",
+    (fixture) => {
+      fixture.data.agents = [];
+      fixture.data.parked = [];
+    },
+    [agent.pubkey],
+    [],
+    undefined,
+    { query },
+  );
+  await screen.findByRole("article", {
+    name: `Agent ${agent.pubkey.slice(0, 12)}`,
+  });
+  await waitFor(() =>
+    expect(
+      query.mock.calls.some(([filters]) =>
+        filters.some((filter) => filter.authors?.includes(agent.pubkey)),
+      ),
+    ).toBe(true),
+  );
+  failed = false;
+  fireEvent.click(screen.getByRole("button", { name: "Refresh agents" }));
+  await screen.findByRole("article", { name: "Agent Recovered profile" });
+});
+
+it.each(["connected", "disconnected"])(
+  "loads source metadata and authenticated pictures with selected connection %s",
+  async (mode) => {
+    const key = keypair();
+    const source = "https://source.example";
+    const picture = `${source}/media/${"ab".repeat(32)}.png`;
+    const event = signed(key, {
+      kind: 0,
+      tags: [],
+      content: JSON.stringify({ display_name: "Source agent", picture }),
+    });
+    const request = vi
+      .spyOn(communityApi, "communityRequest")
+      .mockImplementation(async (id, route) => {
+        expect(id).toBe(source);
+        return route === "query" ? [event] : { identities: [key.pubkey] };
+      });
+    const { f } = setup(
+      mode,
+      (f) => {
+        f.data.agents = [];
+        f.data.parked = [
+          {
+            pubkey: key.pubkey,
+            name: "Old source agent",
+            sources: ["installed"],
+          },
+        ];
+      },
+      [],
+      [],
+      joined([source]),
+    );
+    const card = await screen.findByRole("article", {
+      name: "Agent Source agent",
+    });
+    expect(card.querySelector("img")).toHaveAttribute(
+      "src",
+      `/api/relay/${encodeURIComponent(source)}/media?url=${encodeURIComponent(picture.replace(/\.png$/, ".thumb.jpg"))}`,
+    );
+    expect(within(card).getByRole("button", { name: "Import" })).toBeEnabled();
+    expect(request.mock.calls.map(([, route]) => route)).toEqual([
+      "agent-inventory",
+      "query",
+    ]);
+    expect(
+      f.calls.some(({ action }) => action === "preview" || action === "import"),
+    ).toBe(false);
+  },
+);
+
+it("keeps source discovery after profile failure, retries enrichment, and fences late profiles after viewer change", async () => {
+  const key = keypair();
+  const source = "https://source.example";
+  const event = signed(key, {
+    kind: 0,
+    tags: [],
+    content: '{"name":"Source agent"}',
+  });
+  let resolve!: (value: unknown) => void;
+  const pending = new Promise<unknown>((r) => {
+    resolve = r;
+  });
+  let fail = true;
+  const request = vi
+    .spyOn(communityApi, "communityRequest")
+    .mockImplementation(async (_id, route) => {
+      if (route === "agent-inventory") return { identities: [key.pubkey] };
+      if (fail) throw Error("Profiles unavailable");
+      return pending;
+    });
+  const { changeClient } = setup(
+    "disconnected",
+    (f) => {
+      f.data.agents = [];
+      f.data.parked = [];
+    },
+    [],
+    [],
+    joined([source]),
+  );
+  await screen.findByText(/Agent names and pictures could not be checked/);
+  expect(
+    screen.getByRole("article", { name: `Agent ${key.pubkey.slice(0, 12)}` }),
+  ).toBeVisible();
+  fail = false;
+  fireEvent.click(screen.getByRole("button", { name: "Refresh agents" }));
+  await waitFor(() =>
+    expect(
+      request.mock.calls.filter(([, route]) => route === "query"),
+    ).toHaveLength(2),
+  );
+  act(() => changeClient(joined([], "aa".repeat(32))));
+  await act(async () => {
+    resolve([event]);
+    await pending;
+  });
+  expect(
+    screen.queryByRole("article", { name: "Agent Source agent" }),
+  ).toBeNull();
+});
+
+for (const duplicate of [false, true]) {
+  it(`uses visible exact-key naming for ${duplicate ? "duplicate" : "lone"} cross-community agents`, async () => {
+    setup(
+      "connected",
+      (f) => {
+        f.agent.name = "Local name";
+        f.agent.relayUrl = "wss://other.example";
+        if (duplicate)
+          f.data.agents.push({
+            ...f.agent,
+            id: "second",
+            pubkey: "bc".repeat(32),
+          });
+      },
+      [],
+      [],
+      undefined,
+      {},
+      true,
+    );
+    for (const key of duplicate ? ["ab", "bc"] : ["ab"]) {
+      const label = duplicate
+        ? `Local name · ${npubEncode(key.repeat(32)).slice(-4)}`
+        : "Local name";
+      expect(
+        await screen.findByRole("article", { name: `Agent ${label}` }),
+      ).toBeVisible();
+    }
+  });
+}

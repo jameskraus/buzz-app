@@ -81,6 +81,28 @@ export function UnifiedInventory({
   } = useCommunityInventory(connection, client, destination, refresh);
   const data = state.data;
   const selectedViewerMatches = !client || client.viewer === connection.viewer;
+  const profileRequest = JSON.stringify({
+    keys: [
+      ...new Set([
+        ...(selectedViewerMatches
+          ? snapshot.identities.map((row) => row.pubkey)
+          : []),
+        ...(data?.parked ?? []).map((row) => row.pubkey),
+        ...(data?.agents ?? []).map((row) => row.pubkey),
+      ]),
+    ].sort(),
+    generation: connection.generation,
+    refresh,
+  });
+  useEffect(() => {
+    if (connection.status !== "ready" || !selectedViewerMatches) return;
+    const { keys } = JSON.parse(profileRequest) as { keys: string[] };
+    // Public profiles enrich display only; failed reads must not hide inventory.
+    for (let offset = 0; offset < keys.length; offset += 500)
+      void profiles
+        .ensure(keys.slice(offset, offset + 500), "background")
+        .catch(() => {});
+  }, [profiles, profileRequest, connection.status, selectedViewerMatches]);
   if (!data) return null;
   const discovered = identityTiles(snapshot, () => false);
   const rows = inventoryIdentities(
