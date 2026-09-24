@@ -7,6 +7,7 @@ import type {
 } from "../../features/agents/control";
 import type { RelaySession } from "../../features/relay/session";
 import type { Profile } from "../../features/relay/contracts";
+import { CaretDownIcon } from "../../shared/design-system/icons/index";
 import { Button } from "../../shared/design-system/ui/Button";
 import { AgentCard } from "./AgentCard";
 import { agentSetupConfirmationAvailable } from "../../features/communities/api";
@@ -19,6 +20,7 @@ import { type AgentInventoryIdentity, localSetups } from "./inventory-model";
 export function InventoryIdentityCard({
   row,
   decision,
+  community,
   state,
   control,
   session,
@@ -35,6 +37,7 @@ export function InventoryIdentityCard({
 }: {
   row: AgentInventoryIdentity;
   decision: ReturnType<typeof inventoryDecision>;
+  community: string;
   state: AgentControlState;
   control: AgentControl;
   session: RelaySession;
@@ -93,6 +96,8 @@ export function InventoryIdentityCard({
   );
   return (
     <AgentCard
+      layout={tile ? "tile" : "row"}
+      headingLevel={community ? 4 : 3}
       name={row.displayName}
       avatar={avatar}
       identities={[{ pubkey: row.pubkey, name: row.displayName }]}
@@ -106,6 +111,8 @@ export function InventoryIdentityCard({
         <ManagedAgentActions
           key={agent.id}
           agent={agent}
+          // A section already names its own community; other setups still show theirs.
+          showCommunity={row.localSetups.get(community) !== agent}
           state={state}
           control={control}
           imported={agent.id === importedId}
@@ -196,8 +203,23 @@ export function InventoryIdentityCard({
           {decision.blocked}
         </p>
       )}
-      <details className="min-w-0 text-body-sm text-secondary">
-        <summary className="cursor-pointer">Identity &amp; sources</summary>
+      <details
+        className={
+          tile
+            ? "min-w-0 text-body-sm text-secondary"
+            : "agent-inventory-details min-w-0 text-body-sm text-secondary"
+        }
+      >
+        <summary
+          className="cursor-pointer"
+          aria-label={tile ? undefined : `Details for ${row.displayName}`}
+        >
+          {tile ? (
+            "Identity & sources"
+          ) : (
+            <CaretDownIcon size={18} aria-hidden="true" />
+          )}
+        </summary>
         <div className="flex min-w-0 flex-col gap-2 pt-2">
           {[...row.knownCommunities]
             .filter((community) => community && !row.localSetups.has(community))

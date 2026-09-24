@@ -82,6 +82,7 @@ function setup(
             key={row.pubkey}
             row={row}
             decision={inventoryDecision(row, destination)}
+            community=""
             state={{ ...control.snapshot(), status: "ready", data: f.data }}
             control={control}
             session={owned.session}
@@ -122,7 +123,7 @@ it("browses durable parked identities while disconnected without reading old fil
   expect(within(card).getByText(npubEncode("cd".repeat(32)))).not.toBeVisible();
   fireEvent.click(
     within(card).queryByText("Identity & sources") ??
-      within(card).getByText("Identity & sources"),
+      within(card).getByLabelText(/^Details for /),
   );
   expect(within(card).getByText(npubEncode("cd".repeat(32)))).toBeVisible();
   expect(within(card).getByText("Development Buzz")).toBeVisible();
@@ -145,7 +146,10 @@ it("offers Clone for a configured other-community setup and keeps its exact cont
   const card = await screen.findByRole("article", {
     name: "Agent Fixture agent",
   });
-  expect(within(card).getByText("Identity & sources")).toBeVisible();
+  expect(card).toHaveClass("agent-inventory-row");
+  expect(
+    within(card).getByLabelText("Details for Fixture agent"),
+  ).toBeVisible();
   // The app runs this setup, so its lifecycle and settings stay reachable here.
   expect(within(card).getByRole("button", { name: "Start" })).toBeVisible();
   expect(
@@ -182,7 +186,7 @@ it("makes Import primary and explains how secondary Clone creates a different id
   });
   const importButton = within(card).getByRole("button", { name: "Import" });
   expect(within(card).getByRole("button", { name: "Clone" })).not.toBeVisible();
-  fireEvent.click(within(card).getByText("Identity & sources"));
+  fireEvent.click(within(card).getByLabelText(/^Details for /));
   const cloneButton = within(card).getByRole("button", { name: "Clone" });
   expect(importButton).toBeEnabled();
   expect(cloneButton).toBeEnabled();
@@ -239,7 +243,7 @@ it.each([
     expect(!!within(card).queryByRole("button", { name: "Import" })).toBe(
       showImport,
     );
-    fireEvent.click(within(card).getByText("Identity & sources"));
+    fireEvent.click(within(card).getByLabelText(/^Details for /));
     expect(!!within(card).queryByRole("button", { name: "Clone" })).toBe(
       showClone,
     );
@@ -268,7 +272,7 @@ it("dispatches the chosen source and exact key without importing credentials", (
   });
   fireEvent.click(within(card).getByRole("button", { name: "Import" }));
   expect(onImport).toHaveBeenCalledWith("cd".repeat(32), "development");
-  fireEvent.click(within(card).getByText("Identity & sources"));
+  fireEvent.click(within(card).getByLabelText(/^Details for /));
   fireEvent.click(within(card).getByRole("button", { name: "Clone" }));
   expect(onUseHere).toHaveBeenCalledWith(
     "cd".repeat(32),

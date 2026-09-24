@@ -198,7 +198,7 @@ it("renders four exclusive sections with all setups on one exact-key card", asyn
   ).not.toBeVisible();
   fireEvent.click(
     within(card).queryByText("Identity & sources") ??
-      within(card).getByText("Identity & sources"),
+      within(card).getByLabelText(/^Details for /),
   );
   expect(
     within(card).getByText("Installed Buzz · Development Buzz"),
@@ -217,6 +217,86 @@ it("renders four exclusive sections with all setups on one exact-key card", asyn
     within(
       await screen.findByRole("region", { name: "Relay-only agents" }),
     ).getByRole("article", { name: "Agent Not imported" }),
+  ).toBeVisible();
+});
+
+it("nests local rows by saved community once, with unknown last", async () => {
+  setup("connected", (f) => {
+    const agent = { ...f.agent };
+    f.data.agents = [
+      {
+        ...agent,
+        id: "z",
+        name: "Several setups",
+        relayUrl: "wss://z.example",
+      },
+      {
+        ...agent,
+        id: "a",
+        name: "Several setups",
+        relayUrl: "wss://a.example",
+      },
+      {
+        ...agent,
+        id: "b",
+        pubkey: "bb".repeat(32),
+        name: "Second",
+        relayUrl: "wss://b.example",
+      },
+      {
+        ...agent,
+        id: "unknown",
+        pubkey: "aa".repeat(32),
+        name: "Legacy",
+        relayUrl: "",
+        configured: false,
+      },
+    ];
+  });
+  const group = await screen.findByRole("region", {
+    name: "Local agents in other communities",
+  });
+  expect(
+    within(group)
+      .getAllByRole("heading", { level: 3 })
+      .map((h) => h.textContent),
+  ).toEqual(["https://a.example", "https://b.example", "Community unknown"]);
+  const first = within(group).getByRole("region", {
+    name: "https://a.example",
+  });
+  const row = within(first).getByRole("article", {
+    name: "Agent Several setups",
+  });
+  expect(
+    screen.getAllByRole("article", { name: "Agent Several setups" }),
+  ).toHaveLength(1);
+  expect(within(row).getByRole("heading", { level: 4 })).toHaveTextContent(
+    "Several setups",
+  );
+  // Every saved setup of the key keeps its exact controls on the one row.
+  expect(within(row).getAllByRole("button", { name: "Stop" })).toHaveLength(2);
+  fireEvent.click(within(row).getByLabelText(/^Details for /));
+  // The z setup keeps its own controls, so it names its community there.
+  expect(within(row).getByText("wss://z.example")).toBeVisible();
+  expect(within(row).queryByText("wss://a.example")).toBeNull();
+  expect(within(row).queryByRole("button", { name: "Use here" })).toBeNull();
+  fireEvent.click(within(row).getByLabelText("Details for Several setups"));
+  expect(within(row).getByRole("button", { name: "Clone" })).toBeVisible();
+  expect(
+    within(group).getByRole("region", { name: "Community unknown" }),
+  ).toHaveTextContent("Legacy");
+});
+
+it("does not invent a community for library-only relay identities", async () => {
+  setup("connected", () => {}, []);
+  const group = await screen.findByRole("region", {
+    name: "Relay-only agents",
+  });
+  const unknown = within(group).getByRole("region", {
+    name: "Community unknown",
+  });
+  expect(
+    within(unknown).getByRole("article", { name: "Agent Not imported" }),
   ).toBeVisible();
 });
 

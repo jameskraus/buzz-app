@@ -19,6 +19,7 @@ export function ManagedAgentActions({
   imported,
   destination = "",
   owner = "",
+  showCommunity = true,
   onUseHere,
 }: {
   agent: AgentView;
@@ -27,6 +28,7 @@ export function ManagedAgentActions({
   imported: boolean;
   destination?: string;
   owner?: string;
+  showCommunity?: boolean;
   onUseHere?: ((pubkey: string, action: "use" | "clone") => void) | undefined;
 }) {
   const [settingUp, setSettingUp] = useState(false);
@@ -83,9 +85,11 @@ export function ManagedAgentActions({
   return (
     <div ref={details} tabIndex={-1} className="flex flex-col gap-2">
       <div className="flex flex-col gap-1">
-        <p className="m-0 break-all text-body-sm text-secondary">
-          {agent.relayUrl}
-        </p>
+        {showCommunity && (
+          <p className="m-0 break-all text-body-sm text-secondary">
+            {agent.relayUrl}
+          </p>
+        )}
         <p className="m-0 text-body-sm">
           {state.status === "error" && "Last known: "}
           {agentProcessLabel(agent)}
