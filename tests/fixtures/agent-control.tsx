@@ -81,7 +81,13 @@ window.fetch = async (input, init) => {
       attachmentUploads: true,
     });
   if (url.endsWith("/query")) {
-    const filters = JSON.parse(String(init?.body)) as { kinds?: number[] }[];
+    const filters = JSON.parse(String(init?.body)) as {
+      kinds?: number[];
+      authors?: string[];
+    }[];
+    // Profile reads for discovered inventory identities stay routable too.
+    if (!filters.some((filter) => filter.authors?.includes(profileViewer)))
+      return networkFetch(input, init);
     return Response.json(
       filters.some((filter) => filter.kinds?.includes(0)) && profiles.has(id)
         ? [profiles.get(id)]

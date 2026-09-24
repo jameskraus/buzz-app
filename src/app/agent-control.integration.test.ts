@@ -113,9 +113,21 @@ it("retains working injected control across Agents disable/re-enable and communi
       .find((entry) => entry.pluginId === "buzz.agents");
     // The production registration wrapper passes its injected capability as props.
     const component = page?.component as unknown as () => {
-      props: { control: AgentControl };
+      props: {
+        control: AgentControl;
+        communities: Pick<
+          typeof services.communities,
+          "snapshot" | "subscribe"
+        >;
+      };
     };
-    return component().props.control;
+    const props = component().props;
+    expect(Object.keys(props.communities).sort()).toEqual([
+      "snapshot",
+      "subscribe",
+    ]);
+    expect(props.communities.snapshot()).toBe(services.communities.snapshot());
+    return props.control;
   };
   expect(injectedControl()).toBe(control);
   await control.refresh();

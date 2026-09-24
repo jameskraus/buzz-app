@@ -106,7 +106,10 @@ export function ManagedAgentActions({
         </p>
       )}
       {agent.configured === false &&
-        (onUseHere && setupAvailable ? (
+        (onUseHere &&
+        setupAvailable &&
+        state.data?.localInventoryActions &&
+        control.configureHere ? (
           <Button
             disabled={state.busy || state.status !== "ready"}
             onClick={() => onUseHere(agent.pubkey, "use")}

@@ -561,13 +561,14 @@ it("focuses the imported managed identity without starting it", async () => {
   fireEvent.click(
     await screen.findByRole("button", { name: "Import Fixture agent" }),
   );
-  const notice = await screen.findByText(
-    "Imported, not started. Start it when you are ready.",
-  );
+  const notice = await screen.findByText(/Imported, not started\./);
   const imported = notice.closest("article");
   if (!imported) throw Error("Imported card missing");
   expect(imported).toHaveTextContent("wss://third.example");
   expect(notice.parentElement).toHaveFocus();
+  expect(
+    within(imported).queryByRole("button", { name: "Use here" }),
+  ).toBeNull();
   expect(within(imported).getByRole("button", { name: "Start" })).toBeEnabled();
   expect(f.calls.some((call) => call.action === "start")).toBe(false);
 });
@@ -1238,9 +1239,7 @@ it("credential import keeps real Stop controls reachable without trapping the ed
       await gate;
     });
     await waitFor(() => expect(control.snapshot().busy).toBe(false));
-    expect(
-      screen.queryByText("Imported, not started. Start it when you are ready."),
-    ).toBeNull();
+    expect(screen.queryByText(/Imported, not started\./)).toBeNull();
     await act(async () => control.refresh());
     const imported = control
       .snapshot()
@@ -2592,9 +2591,7 @@ it("uses snapshot capabilities rather than JS wrappers and retains older-host im
   fireEvent.click(
     await screen.findByRole("button", { name: "Import Fixture agent" }),
   );
-  const notice = await screen.findByText(
-    "Imported, not started. Start it when you are ready.",
-  );
+  const notice = await screen.findByText(/Imported, not started\./);
   const card = notice.closest("article");
   if (!card) throw Error("Imported card missing");
   expect(within(card).getByRole("button", { name: "Start" })).toBeEnabled();
@@ -2865,4 +2862,22 @@ it("keeps the chosen source authoritative when an earlier preview finishes late"
       },
     ]),
   );
+});
+
+it("does not offer setup recovery when an older host lacks the native capability", async () => {
+  setup("connected", (fixture) => {
+    delete fixture.data.localInventoryActions;
+    Object.assign(fixture.agent, {
+      configured: false,
+      enabled: false,
+      status: "stopped",
+      runningRevision: null,
+    });
+  });
+  await screen.findAllByText(
+    "Update the desktop app to set up this imported identity.",
+  );
+  expect(screen.queryByRole("button", { name: "Use here" })).toBeNull();
+  for (const start of screen.getAllByRole("button", { name: "Start" }))
+    expect(start).toBeDisabled();
 });

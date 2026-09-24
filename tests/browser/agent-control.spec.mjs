@@ -1180,3 +1180,340 @@ test("rejected import preview keeps inputs and recovers through Load agents", as
     await server.close();
   }
 });
+
+test("card Import opens a focused review and restores focus after dismissal", async ({
+  page,
+}, testInfo) => {
+  const server = await createServer({
+    ...config,
+    configFile: false,
+    logLevel: "error",
+    server: { host: "127.0.0.1", port: 0, strictPort: false },
+  });
+  await server.listen();
+  try {
+    await page.route("**/api/relay/*/agent-inventory", (route) =>
+      route.fulfill({ json: { identities: [] } }),
+    );
+    await page.goto(
+      `http://127.0.0.1:${server.httpServer.address().port}/tests/fixtures/agent-control.html`,
+    );
+    await closeEditor(page);
+    await page.evaluate(async () => {
+      const fixture = window.agentControlFixture;
+      fixture.data.parked = [
+        {
+          pubkey: "cd".repeat(32),
+          name: "Selected import",
+          sources: ["development"],
+        },
+      ];
+      await fixture.control.refresh();
+    });
+    const card = page.getByRole("article", { name: "Agent Selected import" });
+    await expect(card).toBeVisible();
+    // A tall inventory must not put the selected import review below the viewport.
+    await page
+      .getByRole("region", { name: "My agents" })
+      .evaluate((element) => {
+        element.style.minHeight = "2500px";
+      });
+    await card.getByRole("button", { name: "Import", exact: true }).click();
+    const dialog = page.getByRole("dialog", {
+      name: "Import Selected import?",
+    });
+    await expect(dialog).toBeInViewport();
+    await expect
+      .poll(() => dialog.evaluate((el) => el.contains(document.activeElement)))
+      .toBe(true);
+    await expect(
+      page.getByRole("button", { name: "Import from another installation" }),
+    ).toHaveCount(0);
+    await expect(
+      dialog.getByRole("button", { name: "Import agent" }),
+    ).toBeEnabled();
+    await expect(
+      dialog.getByText("Development Buzz", { exact: true }),
+    ).toBeVisible();
+    await expect(dialog.getByLabel("Source library")).toHaveCount(0);
+    await expect(
+      dialog.getByRole("button", { name: /Clone|Load agents/ }),
+    ).toHaveCount(0);
+    await expect(dialog.getByText("Identity", { exact: true })).toHaveCount(0);
+    await dialog.getByRole("button", { name: "Cancel" }).focus();
+    await page.keyboard.press("Shift+Tab");
+    await expect(
+      dialog.getByRole("button", { name: "Import agent" }),
+    ).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(dialog.getByRole("button", { name: "Cancel" })).toBeFocused();
+    await dialog.screenshot({
+      path: testInfo.outputPath("import-healthy.png"),
+    });
+    await page.setViewportSize({ width: 360, height: 480 });
+    await dialog
+      .getByRole("button", { name: "Import agent" })
+      .scrollIntoViewIfNeeded();
+    await expect(
+      dialog.getByRole("button", { name: "Import agent" }),
+    ).toBeInViewport();
+    expect(
+      await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth),
+    ).toBe(true);
+    await dialog.screenshot({ path: testInfo.outputPath("import-narrow.png") });
+    await page.setViewportSize({ width: 1440, height: 950 });
+    await expect(dialog).toHaveAttribute("aria-modal", "true");
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    const trigger = card.getByRole("button", { name: "Import", exact: true });
+    await expect(trigger).toBeFocused();
+    await trigger.click();
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+    await page.evaluate(() => {
+      const fixture = window.agentControlFixture;
+      const commit = fixture.host.commitImport;
+      const gate = new Promise((resolve) => {
+        fixture.releaseImport = resolve;
+      });
+      fixture.host.commitImport = async (...args) => {
+        await gate;
+        return commit(...args);
+      };
+    });
+    await trigger.click();
+    await dialog
+      .getByRole("button", { name: "Import agent", exact: true })
+      .click();
+    await expect(
+      dialog.getByRole("button", { name: "Importing…" }),
+    ).toBeDisabled();
+    await expect(dialog).toHaveAttribute("aria-modal", "false");
+    const local = page.getByRole("article", {
+      name: "Agent Fixture agent",
+      exact: true,
+    });
+    await expect(
+      local.getByRole("button", { name: "Stop", exact: true }),
+    ).toBeEnabled();
+    await local.getByRole("button", { name: "Stop", exact: true }).click();
+    await page.evaluate(() => window.agentControlFixture.releaseImport());
+    // The host's rejection explains the conflicting Stop.
+    await expect(dialog.getByRole("alert")).toContainText(
+      "Could not confirm the operation",
+    );
+    await expect(dialog).toHaveAttribute("aria-modal", "true");
+    await dialog.screenshot({ path: testInfo.outputPath("import-error.png") });
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.evaluate(() => window.agentControlFixture.control.refresh());
+    await expect(dialog).toHaveCount(0);
+    await expect(
+      page
+        .getByRole("article", { name: "Agent Fixture agent", exact: true })
+        .filter({
+          hasText:
+            "npub1ehxumnwdehxumnwdehxumnwdehxumnwdehxumnwdehxumnwdehxskccvaq",
+        }),
+    ).toContainText("Process stopped");
+  } finally {
+    await page
+      .evaluate(() => window.agentControlFixture?.releaseImport?.())
+      .catch(() => {});
+    await server.close();
+  }
+});
+
+test("inventory keeps current-community tiles and compact rows without repeated detail", async ({
+  page,
+}, testInfo) => {
+  const server = await createServer({
+    ...config,
+    configFile: false,
+    logLevel: "error",
+    server: { host: "127.0.0.1", port: 0, strictPort: false },
+  });
+  await server.listen();
+  try {
+    await page.route("**/api/relay/register", (route) => {
+      expect(route.request().postDataJSON()).toEqual({
+        url: "https://relay.example.test",
+      });
+      return route.fulfill({ json: {} });
+    });
+    await page.route("**/api/relay/*/agent-inventory", (route) =>
+      route.fulfill({
+        json: { identities: ["ef".repeat(32), "12".repeat(32)] },
+      }),
+    );
+    await page.route("**/api/relay/*/query", (route) => {
+      expect(route.request().postDataJSON()).toEqual([
+        { kinds: [0], authors: ["ef".repeat(32), "12".repeat(32)], limit: 500 },
+      ]);
+      return route.fulfill({ json: [] });
+    });
+    await page.goto(
+      `http://127.0.0.1:${server.httpServer.address().port}/tests/fixtures/agent-control.html`,
+    );
+    await closeEditor(page);
+    await page.evaluate(async () => {
+      const fixture = window.agentControlFixture;
+      fixture.data.agents.push({
+        ...fixture.data.agents[0],
+        id: "other-community",
+        pubkey: "56".repeat(32),
+        name: "Other community agent",
+        relayUrl: "wss://other.example",
+      });
+      fixture.data.parked = [
+        {
+          pubkey: "cd".repeat(32),
+          name: "Research assistant with a longer name",
+          sources: ["development"],
+        },
+        {
+          pubkey: "34".repeat(32),
+          name: "Release helper",
+          sources: ["installed", "development"],
+        },
+      ];
+      await fixture.control.refresh();
+    });
+    const inventory = page.getByRole("region", {
+      name: "My agents",
+      exact: true,
+    });
+    const imports = inventory.getByRole("region", {
+      name: "Available to import",
+      exact: true,
+    });
+    const relay = inventory.getByRole("region", {
+      name: "Relay-only agents",
+      exact: true,
+    });
+    await expect(imports.getByRole("article")).toHaveCount(2);
+    await expect(relay.getByRole("article")).toHaveCount(2);
+    await expect(inventory.getByText(/No import source confirmed/)).toHaveCount(
+      0,
+    );
+    await expect(inventory.locator("[data-public-key]:visible")).toHaveCount(0);
+    await expect(
+      inventory.getByText(
+        /Known community:|Found in old Buzz:|Discovery does not import/,
+      ),
+    ).toHaveCount(0);
+    const local = inventory.getByRole("article", {
+      name: "Agent Fixture agent",
+      exact: true,
+    });
+    await expect(
+      local.getByRole("button", { name: "Stop", exact: true }),
+    ).toBeEnabled();
+    expect(await local.evaluate((el) => getComputedStyle(el).display)).toBe(
+      "flex",
+    );
+    const other = inventory
+      .getByRole("region", {
+        name: "Local agents in other communities",
+        exact: true,
+      })
+      .getByRole("article");
+    await expect(
+      inventory.getByRole("heading", {
+        level: 3,
+        name: "https://other.example",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(other.getByRole("heading", { level: 4 })).toHaveText(
+      "Other community agent",
+    );
+    await expect(relay.getByRole("heading", { level: 3 })).toHaveCount(1);
+    await expect(relay.getByRole("region").getByRole("article")).toHaveCount(2);
+    await expect(other).toHaveClass(/agent-inventory-row/);
+    await expect(
+      other.getByText("wss://other.example", { exact: true }),
+    ).toHaveCount(0);
+    // The app runs this setup, so its row keeps its own lifecycle control.
+    await expect(
+      other.getByRole("button", { name: "Stop", exact: true }),
+    ).toHaveCount(1);
+    await expect(
+      other.getByRole("button", { name: "Use here", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      other.getByRole("button", { name: "Clone", exact: true }),
+    ).toBeVisible();
+    const first = imports.getByRole("article").first();
+    const second = imports.getByRole("article").nth(1);
+    for (const width of [1200, 390]) {
+      await page.setViewportSize({ width, height: 1100 });
+      const otherBox = await other.boundingBox();
+      expect(otherBox.width).toBeGreaterThan(width === 1200 ? 600 : 250);
+      const cloneBox = await other
+        .getByRole("button", { name: "Clone", exact: true })
+        .boundingBox();
+      expect(cloneBox.x + cloneBox.width).toBeLessThanOrEqual(
+        otherBox.x + otherBox.width,
+      );
+      const firstBox = await first.boundingBox();
+      const secondBox = await second.boundingBox();
+      expect(firstBox.x).toBe(secondBox.x);
+      expect(firstBox.width).toBe(secondBox.width);
+      expect(secondBox.y).toBeGreaterThanOrEqual(firstBox.y + firstBox.height);
+      expect(firstBox.height).toBeLessThan(width === 1200 ? 100 : 180);
+      expect(
+        await inventory.evaluate((el) => el.scrollWidth <= el.clientWidth),
+      ).toBe(true);
+      const relayRow = relay.getByRole("article").first();
+      const nameBox = await relayRow.getByRole("heading").boundingBox();
+      const detailBox = await relayRow.locator("summary").boundingBox();
+      expect(detailBox.x).toBeGreaterThan(nameBox.x + nameBox.width);
+      expect(
+        Math.abs(
+          detailBox.y + detailBox.height / 2 - nameBox.y - nameBox.height / 2,
+        ),
+      ).toBeLessThan(2);
+      await inventory.screenshot({
+        path: testInfo.outputPath(`inventory-${width}.png`),
+      });
+    }
+    await other
+      .getByLabel("Details for Other community agent", { exact: true })
+      .click();
+    await expect(
+      other.getByRole("button", { name: "Clone", exact: true }),
+    ).toBeVisible();
+    await expect(other.locator("[data-public-key]")).toBeVisible();
+    // Edit, Duplicate and Delete stay reachable for a setup outside this community.
+    await expect(
+      other.getByRole("button", { name: "Actions for Other community agent" }),
+    ).toBeVisible();
+    const details = first.getByLabel("Details for Release helper", {
+      exact: true,
+    });
+    await expect(
+      imports.getByRole("button", { name: "Clone", exact: true }),
+    ).toHaveCount(0);
+    await details.click();
+    await expect(
+      first.getByRole("button", { name: "Clone", exact: true }),
+    ).toBeVisible();
+    await expect(first.locator("[data-public-key]")).toBeVisible();
+    expect(
+      await inventory.evaluate((el) => el.scrollWidth <= el.clientWidth),
+    ).toBe(true);
+    await details.click();
+    const source = first.getByLabel("Old Buzz installation");
+    await expect(
+      first.getByRole("button", { name: "Import", exact: true }),
+    ).toBeDisabled();
+    await source.selectOption("installed");
+    await expect(
+      first.getByRole("button", { name: "Import", exact: true }),
+    ).toBeEnabled();
+  } finally {
+    await server.close();
+  }
+});

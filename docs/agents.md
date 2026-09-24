@@ -23,14 +23,14 @@ add-existing membership, Save/recovery and all runner management are out of V1.
 - Only definition ID/name, identity public key/name/definition link, and optional
   avatar artwork leave the host. Prompts, configuration, credentials and execution receipts are not
   projected. This is local library evidence, **not verified ownership**.
-- Selected definitions remain one card each, including definitions without an
-  identity. Exact linked keys remain available in each card’s identity disclosure, including namesakes; unlinked and
-  unmatched identities use Custom agents/Other identities groupings. Unlike old Buzz's
-  runtime-dependent representative selection, this read-only view shows all
-  non-archived linked keys and has no profile/start action or running badge.
-- Confirmed relay archives hide identity rows, not definition cards. Missing
-  archive evidence is labeled; it does not erase the saved library. This is
-  display behavior, never mention permission.
+- The library shows one tile per exact identity, grouped only by explicit profile
+  links. Each tile discloses its full public key. Profiles with no linked identity
+  appear separately; an archived identity does not become an empty profile.
+- Only distinct keys with the same displayed name need a short npub suffix. Names
+  alone never create a profile group. Suffix collisions extend deterministically using
+  the complete inventory, including identities hidden by archive filtering.
+- Missing archive evidence keeps identities visible. Archive filtering affects
+  display only, never mention permission or runtime control.
 - One lazy host read per opening/Refresh; no polling or relay-directory startup
   scan. Concurrent host requests coalesce. Read caps: 8 MiB / 2000 records;
   malformed/missing files fail visibly without echoing their contents. The host
@@ -521,5 +521,20 @@ service. Each relay session binds its own view. A ready native record takes
 precedence only in its matching community; otherwise the ready legacy display
 inventory supplies the name, then the public profile. Plugin disable restores
 public-profile names. These labels never change identity keys, membership,
-credentials, or runtime admission. Profile panels consume this view; other name
-surfaces are being migrated separately.
+credentials, or runtime admission. Profile panels, messages, mention choices,
+activity, conversation labels and new notifications consume this view. Mention
+parsing still uses signed identity evidence before resolving its visible label.
+
+### Additive community inventory
+
+The active session reads the owner's kind-30175 profiles and kind-30177 identities
+from its accessible relay. It also retains the local library reader. The inventory
+joins exact public keys, not equal names; explicit profile references use the
+publisher's slug mapping only when local definitions do not collide. Local names
+and artwork win for matching keys. Native configuration still wins within its
+matching community. A failed source leaves the other source visible with a warning.
+
+Discovery is not global coverage, verified membership, credentials, or execution
+status. Native cards keep their controls. Other known identities appear in a
+read-only section, while the existing old-desktop import flow stays available.
+No keys, config, memory, membership, or runtime state are changed by discovery.
