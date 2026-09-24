@@ -15,7 +15,6 @@ import {
 import type { Communities, PersonalProfile } from "./service";
 import { canSaveProfile, ProfileFields, profilesEqual } from "./ProfileFields";
 import { communityDestination, relayOrigin } from "./destination";
-import { registerCommunity } from "./connection";
 import { nativeIdentityEnabled } from "../identity/service";
 import { readErrorKind } from "../relay/errors";
 import { createJoinJournal, type PendingJoin } from "./join-journal";
@@ -123,7 +122,6 @@ export function CommunityDialog({
       await work(async () => {
         const next = communityDestination(relayOrigin(url));
         setDestination(next);
-        await registerCommunity(next.id, AbortSignal.timeout(12000));
         const value = await communityRequest<CommunityInfo>(next.id, "info");
         if (!mounted.current) return;
         const pending = journal?.get(next.id);

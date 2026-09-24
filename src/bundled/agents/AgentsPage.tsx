@@ -1,3 +1,4 @@
+import type { CommunityReader } from "../../features/communities/service";
 import { UnifiedInventory } from "./UnifiedInventory";
 import { useIdentityNames } from "../../features/identity-names/react";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
@@ -21,11 +22,14 @@ import { AgentCard } from "./AgentCard";
 import { AgentControlPanel } from "./AgentControlPanel";
 import { ManagedAgentActions } from "./ManagedAgentActions";
 
+const noCommunities = { subscribe: () => () => {}, snapshot: () => undefined };
+
 export function AgentsPage({
   relay,
   control,
   navigation,
   open,
+  communities,
 }: PageProps & {
   relay: RelayData;
   control?: AgentControl;
@@ -33,6 +37,7 @@ export function AgentsPage({
     target: OpenTarget,
     options?: { replace?: boolean },
   ) => Promise<OpenResult>;
+  communities?: CommunityReader;
 }) {
   const [headerActions, setHeaderActions] = useState<HTMLDivElement | null>(
     null,
@@ -61,6 +66,12 @@ export function AgentsPage({
     )
       request.complete({ status: "failed", reason: "unavailable" });
   }, [request, target, editTarget, control, connection.status]);
+  const reader = communities ?? noCommunities;
+  const client = useSyncExternalStore(
+    reader.subscribe,
+    reader.snapshot,
+    reader.snapshot,
+  );
   let importDestination = "";
   if (
     connection.viewer &&
@@ -162,6 +173,7 @@ export function AgentsPage({
                         importedId={importedId}
                         control={control}
                         connection={connection}
+                        client={client}
                         onUseHere={onUseHere}
                         onImport={onImport}
                       />

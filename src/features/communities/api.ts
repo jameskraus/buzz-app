@@ -1,6 +1,7 @@
 import { nativeIdentityEnabled } from "../identity/service";
 import { nativeCommunityRequest } from "./native-api";
 import { connectCommunityTransport } from "./connection";
+import { registerBrokerCommunity } from "../relay/transport";
 import type { RelaySession } from "../relay/session";
 import type { PersonalProfile } from "./service";
 export type CommunityInfo = {
@@ -23,9 +24,16 @@ export async function communityRequest<T>(
   id: string,
   route: string,
   body?: unknown,
+  signal?: AbortSignal,
 ): Promise<T> {
   if (nativeIdentityEnabled())
     return nativeCommunityRequest(id, route, body) as Promise<T>;
+  signal = signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(25000)])
+    : AbortSignal.timeout(25000);
+  // Scoped HTTP reads need broker registration, not an acquired relay session.
+  await registerBrokerCommunity(id, signal);
+  signal.throwIfAborted();
   const response = await fetch(
     `/api/relay/${encodeURIComponent(id)}/${route}`,
     {
@@ -36,7 +44,7 @@ export async function communityRequest<T>(
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
           }),
-      signal: AbortSignal.timeout(25000),
+      signal,
     },
   );
   const result = await response.json();

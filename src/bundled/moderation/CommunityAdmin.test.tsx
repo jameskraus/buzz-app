@@ -122,6 +122,8 @@ function broker(routes: Record<string, (body: unknown) => Response>) {
       const body = init?.body ? JSON.parse(String(init.body)) : undefined;
       calls.push({ route, body });
       if (route === "session") return Response.json({ relayAuthor: relayKey });
+      // Scoped requests register their community with the broker first.
+      if (route === "register") return new Response(null, { status: 204 });
       return routes[route]?.(body) ?? Response.json({}, { status: 404 });
     }),
   );

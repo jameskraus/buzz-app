@@ -41,6 +41,7 @@ export function localSetups(
 /** Join public metadata and native-owned facts by key without changing storage. */
 export function inventoryIdentities(
   relayIdentities: AgentLibrary["identities"],
+  communityIdentities: ReadonlyMap<CommunityUrl, readonly string[]>,
   data: Pick<ControlSnapshot, "agents" | "parked">,
   resolveName: (pubkey: string, fallback: string) => string,
 ): Map<string, AgentInventoryIdentity> {
@@ -67,6 +68,15 @@ export function inventoryIdentities(
     const row = identity(metadata.pubkey, metadata.name);
     row.relayMetadata = metadata;
     row.avatar = metadata.avatar;
+  }
+  for (const [community, keys] of communityIdentities) {
+    for (const key of keys) {
+      const row = identity(key);
+      row.knownCommunities = new Set([
+        ...row.knownCommunities,
+        relayOrigin(community),
+      ]);
+    }
   }
   // The native transport still calls historical old-Buzz inventory "parked".
   for (const source of data.parked ?? []) {

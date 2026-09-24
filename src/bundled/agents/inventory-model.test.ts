@@ -16,6 +16,7 @@ it("joins sources by key, not name, and keeps relay metadata distinct", () => {
   };
   const rows = inventoryIdentities(
     [metadata],
+    new Map([[here, [key]]]),
     {
       agents: [],
       parked: [
@@ -37,7 +38,7 @@ it("joins sources by key, not name, and keeps relay metadata distinct", () => {
     localIdentity: null,
   });
   expect(rows.get(key)?.oldBuzzSources).toEqual(["installed", "development"]);
-  expect(rows.get(key)?.knownCommunities).toEqual(new Set());
+  expect(rows.get(key)?.knownCommunities).toEqual(new Set([here]));
   expect(rows.get(other)?.relayMetadata).toBeNull();
 });
 
@@ -45,6 +46,7 @@ it("keeps local custody without inventing a setup for an unconfigured import", (
   const { agent } = controlFixture();
   const rows = inventoryIdentities(
     [],
+    new Map(),
     { agents: [{ ...agent, configured: false }] },
     name,
   );
@@ -61,6 +63,7 @@ it("keys configured setups by canonical community while retaining each setup", (
   const second = { ...agent, id: "second", relayUrl: "https://other.example/" };
   const rows = inventoryIdentities(
     [],
+    new Map(),
     {
       agents: [
         { ...agent, configured: false },
@@ -84,6 +87,7 @@ it("does not silently overwrite duplicate normalized community setups", () => {
   expect(() =>
     inventoryIdentities(
       [],
+      new Map(),
       {
         agents: [
           agent,
@@ -98,9 +102,12 @@ it("does not silently overwrite duplicate normalized community setups", () => {
 it("retains an older local record without silently assigning a missing community", () => {
   const { agent } = controlFixture();
   const legacy = { ...agent, configured: false, relayUrl: "" };
-  const row = inventoryIdentities([], { agents: [legacy] }, name).get(
-    agent.pubkey,
-  );
+  const row = inventoryIdentities(
+    [],
+    new Map(),
+    { agents: [legacy] },
+    name,
+  ).get(agent.pubkey);
   expect(row?.unconfiguredSetups).toEqual([legacy]);
   expect(row?.knownCommunities.size).toBe(0);
   expect(row?.localIdentity).toEqual({ id: agent.id });

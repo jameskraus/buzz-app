@@ -1,5 +1,7 @@
 import { InventoryView } from "./InventoryView";
-import { useEffect, useSyncExternalStore } from "react";
+import type { ClientSnapshot } from "../../features/communities/service";
+import { useCommunityInventory } from "./use-community-inventory";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type {
   AgentControl,
   AgentControlState,
@@ -18,6 +20,7 @@ export function UnifiedInventory({
   state,
   control,
   connection,
+  client,
   edit,
   duplicate,
   remove,
@@ -28,6 +31,7 @@ export function UnifiedInventory({
   state: AgentControlState;
   control: AgentControl;
   connection: RelaySnapshot;
+  client?: ClientSnapshot | undefined;
   edit(agent: AgentView, avatar?: string): void;
   duplicate?: ((agent: AgentView) => void) | undefined;
   remove?: ((agent: AgentView) => void) | undefined;
@@ -66,13 +70,26 @@ export function UnifiedInventory({
     connection.viewer && connection.scope?.endsWith(`:${connection.viewer}`)
       ? relayOrigin(connection.scope.slice(0, -(connection.viewer.length + 1)))
       : "";
+  const [refresh, setRefresh] = useState(0);
+  const {
+    communityIdentities,
+    profiles: sourceProfiles,
+    profileErrors,
+    errors,
+    pending,
+    currentReadComplete,
+  } = useCommunityInventory(connection, client, destination, refresh);
   const data = state.data;
+  const selectedViewerMatches = !client || client.viewer === connection.viewer;
   if (!data) return null;
   const discovered = identityTiles(snapshot, () => false);
   const rows = inventoryIdentities(
-    connection.status === "ready" ? discovered.identities : [],
+    connection.status === "ready" && selectedViewerMatches
+      ? discovered.identities
+      : [],
+    communityIdentities,
     data,
-    (_key, fallback) => fallback,
+    (key, fallback) => sourceProfiles.get(key)?.name ?? fallback,
   );
   // Apply archive evidence after all discovery sources join. Keep local controls.
   for (const row of rows.values()) {
@@ -104,8 +121,13 @@ export function UnifiedInventory({
       session={connection.session}
       destination={destination}
       rows={rows}
-      profiles={connection.status === "ready" ? discovered.profiles : []}
+      profiles={
+        connection.status === "ready" && selectedViewerMatches
+          ? discovered.profiles
+          : []
+      }
       publicProfiles={publicProfiles}
+      sourceProfiles={sourceProfiles}
       edit={edit}
       duplicate={duplicate}
       remove={remove}
@@ -118,18 +140,38 @@ export function UnifiedInventory({
           {warning} Retry local discovery by reopening the app.
         </p>
       ))}
-      {connection.status === "ready" && (
+      {(client?.status === "ready" || connection.status === "ready") && (
         <div className="self-start">
           <Button
             disabled={snapshot.status === "loading"}
             onClick={() => {
               void library.refresh();
               void archives.refresh();
+              setRefresh((value) => value + 1);
             }}
           >
             Refresh agents
           </Button>
         </div>
+      )}
+      {pending && <p role="status">Checking community inventory…</p>}
+      {profileErrors.map((community) => (
+        <p key={community} role="alert">
+          Agent names and pictures could not be checked for {community}. Refresh
+          to retry.
+        </p>
+      ))}
+      {errors.map((community) => (
+        <p key={community} role="alert">
+          Community inventory could not be checked for {community}. Refresh to
+          retry.
+        </p>
+      ))}
+      {!currentReadComplete && (
+        <p role="status">
+          Showing known community associations. Community checks are not
+          current.
+        </p>
       )}
       {snapshot.error && connection.status === "ready" && (
         <p role="alert">{snapshot.error}</p>

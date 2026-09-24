@@ -190,3 +190,25 @@ it("reacts to NIP-05-only replacements and removal without asserting verificatio
     reader.dispose();
   }
 });
+
+it("retains safe inline profile pictures through parsing and media routing", async () => {
+  const { mediaUrl } = await import("./transport");
+  for (const picture of [
+    "data:image/png;base64,AAAA",
+    "https://source.example/picture.png",
+    "data:image/svg+xml;base64,AAAA",
+    "javascript:alert(1)",
+    "https://user:password@source.example/picture.png",
+    `data:image/png;base64,${"A".repeat(512 * 1024)}`,
+  ]) {
+    const safe =
+      picture === "data:image/png;base64,AAAA" ||
+      picture === "https://source.example/picture.png";
+    const parsed = foldProfiles([profile(user, { name: "Mic", picture })]).get(
+      user.pubkey,
+    );
+    expect(parsed?.picture).toBe(safe ? picture : undefined);
+    if (parsed?.picture)
+      expect(mediaUrl(parsed.picture, undefined, undefined)).toBe(picture);
+  }
+});

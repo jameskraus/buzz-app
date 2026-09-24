@@ -18,6 +18,7 @@ function inventoryDecision(
   const pubkey = controlFixture().agent.pubkey;
   const rows = inventoryIdentities(
     [{ pubkey, name: "Agent" }],
+    new Map(communities.map((community) => [community, [pubkey]])),
     {
       agents,
       parked: oldBuzz
@@ -28,7 +29,6 @@ function inventoryDecision(
   );
   const row = rows.get(pubkey);
   if (!row) throw new Error("Missing fixture identity");
-  row.knownCommunities = new Set(communities);
   return decide(row, destination);
 }
 const here = "https://relay.example.test";

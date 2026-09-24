@@ -22,6 +22,16 @@ export type ClientSnapshot = Saved & {
   viewer?: string;
   error?: string;
 };
+/** Read-only membership inventory; does not acquire or select relay sessions. */
+export type CommunityReader = {
+  snapshot(): ClientSnapshot;
+  subscribe(listener: () => void): () => void;
+};
+declare module "@deepseek-ai/cordis" {
+  interface Context {
+    communityReader: CommunityReader;
+  }
+}
 const empty = (): Saved => ({
   profile: { name: "", picture: "", about: "" },
   memberships: [],

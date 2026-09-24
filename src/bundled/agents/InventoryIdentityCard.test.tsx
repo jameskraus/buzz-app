@@ -56,19 +56,12 @@ function setup(
             definitionId: "linked",
           },
         ],
+    mode === "disconnected"
+      ? new Map()
+      : new Map([["https://relay.example.test", identities]]),
     f.data,
     (_key, fallback) => fallback,
   );
-  if (mode !== "disconnected") {
-    for (const key of identities) {
-      const row = rows.get(key);
-      if (row)
-        row.knownCommunities = new Set([
-          ...row.knownCommunities,
-          "https://relay.example.test",
-        ]);
-    }
-  }
   const onImport = vi.fn();
   const onUseHere = vi.fn();
   function Cards() {
@@ -88,6 +81,7 @@ function setup(
             session={owned.session}
             destination={destination}
             publicProfiles={new Map()}
+            sourceProfiles={new Map()}
             edit={() => {}}
             importedId={null}
             onUseHere={onUseHere}

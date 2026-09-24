@@ -61,6 +61,8 @@ import {
   readSnapshotText,
   readSnapshotCommunity,
 } from "../src/features/relay/read-state-snapshot.ts";
+import { readRelayLibrary } from "../src/features/agents/relay-library.ts";
+import { eventDto } from "../src/features/relay/events.ts";
 import { readAgentLibrary } from "./agent-library.mjs";
 import { createBuilderlab } from "./builderlab.mjs";
 import {
@@ -1947,6 +1949,7 @@ export function relayBrokerPlugin({
               "/api/relay/authorize-agent",
               "/api/relay/agent-log-proof",
               "/api/relay/resolve-agent-community",
+              "/api/relay/agent-inventory",
               "/api/relay/claim",
               "/api/relay/accept-policy",
               "/api/relay/invite",
@@ -2079,31 +2082,105 @@ export function relayBrokerPlugin({
             ).toString("hex");
             return json(res, 200, { signature });
           }
-          if (route === "/api/relay/resolve-agent-community") {
+          if (
+            [
+              "/api/relay/resolve-agent-community",
+              "/api/relay/agent-inventory",
+            ].includes(route)
+          ) {
+            const inspecting = route === "/api/relay/agent-inventory";
             if (
-              !scoped ||
-              filters?.owner !== viewer ||
-              !/^[0-9a-f]{64}$/.test(filters?.pubkey ?? "") ||
-              filters.pubkey === viewer ||
-              filters?.confirmed !== true ||
-              Object.keys(filters).length !== 3
+              inspecting
+                ? !scoped ||
+                  !filters ||
+                  typeof filters !== "object" ||
+                  Array.isArray(filters) ||
+                  Object.keys(filters).length !== 0
+                : !scoped ||
+                  filters?.owner !== viewer ||
+                  !/^[0-9a-f]{64}$/.test(filters?.pubkey ?? "") ||
+                  filters.pubkey === viewer ||
+                  filters?.confirmed !== true ||
+                  Object.keys(filters).length !== 3
             )
               return json(res, 400, {
                 error: "Explicit owner community resolution required",
               });
+            cancel.signal.throwIfAborted();
             // The signed account confirms setup intent. Native verifies it against
             // retained source-owner authorization; inventory is not permission.
-            cancel.signal.throwIfAborted();
-            const relayUrl = relay.replace(/^https:/, "wss:");
-            const digest = createHash("sha256")
-              .update(`nostr:agent-community:${filters.pubkey}:${relayUrl}`)
-              .digest();
-            return json(res, 200, {
-              pubkey: filters.pubkey,
-              relayUrl,
-              owner: viewer,
-              signature: Buffer.from(schnorr.sign(digest, key)).toString("hex"),
-            });
+            if (!inspecting) {
+              cancel.signal.throwIfAborted();
+              const relayUrl = relay.replace(/^https:/, "wss:");
+              const digest = createHash("sha256")
+                .update(`nostr:agent-community:${filters.pubkey}:${relayUrl}`)
+                .digest();
+              return json(res, 200, {
+                pubkey: filters.pubkey,
+                relayUrl,
+                owner: viewer,
+                signature: Buffer.from(schnorr.sign(digest, key)).toString(
+                  "hex",
+                ),
+              });
+            }
+            // Discovery is independent of setup and local credential import.
+            let inventory;
+            try {
+              inventory = await readRelayLibrary(
+                {
+                  read: async (filters, { signal }) => {
+                    const body = JSON.stringify(filters);
+                    const url = `${relay}/query`;
+                    const auth = finalizeEvent(
+                      {
+                        kind: 27235,
+                        created_at: Math.floor(Date.now() / 1000),
+                        content: "",
+                        tags: [
+                          ["u", url],
+                          ["method", "POST"],
+                          [
+                            "payload",
+                            createHash("sha256").update(body).digest("hex"),
+                          ],
+                          ["nonce", randomBytes(16).toString("hex")],
+                        ],
+                      },
+                      key,
+                    );
+                    const response = await fetchUpstream(url, {
+                      method: "POST",
+                      body,
+                      redirect: "error",
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Nostr ${Buffer.from(JSON.stringify(auth)).toString("base64")}`,
+                      },
+                      signal,
+                    });
+                    if (!response.ok) throw new Error("Inventory read failed");
+                    const text = await response.text();
+                    if (Buffer.byteLength(text) > 8 * 1024 * 1024)
+                      throw new Error("Inventory evidence is too large");
+                    const events = JSON.parse(text);
+                    if (!Array.isArray(events))
+                      throw new Error("Invalid inventory page");
+                    return events.map(eventDto);
+                  },
+                },
+                viewer,
+                AbortSignal.any([cancel.signal, AbortSignal.timeout(10000)]),
+              );
+            } catch {
+              return json(res, 409, {
+                error: "Community inventory could not be read",
+              });
+            }
+            const identities = inventory.identities.map(
+              (identity) => identity.pubkey,
+            );
+            return json(res, 200, { identities });
           }
           if (route === "/api/relay/authorize-agent") {
             if (

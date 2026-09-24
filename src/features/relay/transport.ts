@@ -4,6 +4,7 @@ import {
   type MemoryListing,
 } from "../agents/memory";
 import { publicationRefusal } from "../developer/traffic";
+import { avatarSource } from "../../shared/avatar-source";
 import { brokerUpload, type AttachmentUpload } from "./attachments";
 import type { ChannelKitHost } from "../channel-templates/host";
 import type { KitRecord } from "../channel-templates/model";
@@ -156,6 +157,7 @@ export function mediaUrl(
   relayOrigin: string | undefined,
   size?: "small",
 ): string | undefined {
+  if (url.startsWith("data:")) return avatarSource(url);
   if (url.startsWith(`${relayOrigin}/media/`)) {
     const media =
       size === "small"

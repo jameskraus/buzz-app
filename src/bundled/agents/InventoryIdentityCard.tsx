@@ -7,6 +7,7 @@ import type {
 } from "../../features/agents/control";
 import type { RelaySession } from "../../features/relay/session";
 import type { Profile } from "../../features/relay/contracts";
+import { mediaUrl } from "../../features/relay/transport";
 import { CaretDownIcon } from "../../shared/design-system/icons/index";
 import { Button } from "../../shared/design-system/ui/Button";
 import { AgentCard } from "./AgentCard";
@@ -26,6 +27,7 @@ export function InventoryIdentityCard({
   session,
   destination,
   publicProfiles,
+  sourceProfiles,
   edit,
   duplicate,
   remove,
@@ -43,6 +45,7 @@ export function InventoryIdentityCard({
   session: RelaySession;
   destination: string;
   publicProfiles: ReadonlyMap<string, Profile>;
+  sourceProfiles: ReadonlyMap<string, Profile & { community: string }>;
   edit(agent: AgentView, avatar?: string): void;
   duplicate?: ((agent: AgentView) => void) | undefined;
   remove?: ((agent: AgentView) => void) | undefined;
@@ -58,7 +61,15 @@ export function InventoryIdentityCard({
 }) {
   const data = state.data;
   if (!data) return null;
-  const avatar = row.avatar ?? publicProfiles.get(row.pubkey)?.picture;
+  const sourceProfile = sourceProfiles.get(row.pubkey);
+  const avatar =
+    row.avatar ??
+    publicProfiles.get(row.pubkey)?.picture ??
+    sourceProfile?.picture;
+  const imageCommunity =
+    sourceProfile && sourceProfile.picture === avatar
+      ? sourceProfile.community
+      : undefined;
   const tile = decision.group === localHereGroup;
   const setupAvailable = agentSetupConfirmationAvailable();
   // The app runs every saved setup, so each keeps its controls whether or not
@@ -100,6 +111,18 @@ export function InventoryIdentityCard({
       headingLevel={community ? 4 : 3}
       name={row.displayName}
       avatar={avatar}
+      media={
+        imageCommunity
+          ? (url, size) =>
+              mediaUrl(
+                url,
+                (target) =>
+                  `/api/relay/${encodeURIComponent(imageCommunity)}/media?url=${encodeURIComponent(target)}`,
+                imageCommunity,
+                size,
+              )
+          : undefined
+      }
       identities={[{ pubkey: row.pubkey, name: row.displayName }]}
       session={session}
       editable={setups}

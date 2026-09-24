@@ -63,6 +63,7 @@ export function InventoryView({
   rows,
   profiles,
   publicProfiles,
+  sourceProfiles,
   edit,
   duplicate,
   remove,
@@ -78,6 +79,7 @@ export function InventoryView({
   rows: ReadonlyMap<string, AgentInventoryIdentity>;
   profiles: ReturnType<typeof identityTiles>["profiles"];
   publicProfiles: ReadonlyMap<string, Profile>;
+  sourceProfiles: ReadonlyMap<string, Profile & { community: string }>;
   edit(agent: AgentView, avatar?: string): void;
   duplicate?: ((agent: AgentView) => void) | undefined;
   remove?: ((agent: AgentView) => void) | undefined;
@@ -155,6 +157,7 @@ export function InventoryView({
                       session={session}
                       destination={destination}
                       publicProfiles={publicProfiles}
+                      sourceProfiles={sourceProfiles}
                       edit={edit}
                       duplicate={duplicate}
                       remove={remove}

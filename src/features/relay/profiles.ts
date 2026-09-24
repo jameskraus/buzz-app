@@ -1,3 +1,4 @@
+import { avatarSource } from "../../shared/avatar-source";
 import { newer } from "./events";
 import type { EventData } from "./events";
 import type { Profile } from "./contracts";
@@ -38,10 +39,7 @@ export function foldProfiles(
         (value): value is string =>
           typeof value === "string" && value.trim().length > 0,
       );
-      const picture =
-        typeof body.picture === "string" && /^https:\/\//.test(body.picture)
-          ? body.picture
-          : undefined;
+      const picture = avatarSource(body.picture);
       profiles.set(
         pubkey,
         Object.freeze({
