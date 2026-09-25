@@ -93,6 +93,7 @@ fn native_command_permissions_allow_only_main_webview() {
         "agent_control_action",
         "agent_control_import_preview",
         "agent_control_import_commit",
+        "agent_control_local_clone_settings",
         "agent_control_clone_settings",
         "agent_control_use_here",
         "agent_models_begin",

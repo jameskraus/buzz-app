@@ -44,7 +44,11 @@ export function InventoryIdentityCard({
   duplicate?: ((agent: AgentView) => void) | undefined;
   remove?: ((agent: AgentView) => void) | undefined;
   importedId: string | null;
-  onUseHere(pubkey: string): void;
+  onUseHere(
+    pubkey: string,
+    action: "use" | "clone",
+    source?: ImportSource,
+  ): void;
   onImport(pubkey: string, source?: ImportSource): void;
   selectedSource: ImportSource | undefined;
   onSourceChange(source: ImportSource): void;
@@ -65,6 +69,28 @@ export function InventoryIdentityCard({
         ? selected
         : undefined;
   const needsSource = !row.localIdentity && row.oldBuzzSources.length > 1;
+  const cloneAction = (!!row.localIdentity ||
+    row.oldBuzzSources.length > 0) && (
+    <Button
+      variant="subtle"
+      size="compact"
+      title="Create a new agent from this agent’s name and instructions, with a new identity and key. Memories and history are not copied."
+      disabled={
+        state.busy ||
+        state.status !== "ready" ||
+        (row.localIdentity
+          ? !data.localInventoryActions || !control.localCloneSettings
+          : !control.cloneSettings) ||
+        !destination ||
+        (needsSource && !source)
+      }
+      onClick={() =>
+        onUseHere(row.pubkey, "clone", row.localIdentity ? undefined : source)
+      }
+    >
+      Clone
+    </Button>
+  );
   return (
     <AgentCard
       name={row.displayName}
@@ -149,7 +175,7 @@ export function InventoryIdentityCard({
                 !control.configureHere ||
                 !setupAvailable
               }
-              onClick={() => onUseHere(row.pubkey)}
+              onClick={() => onUseHere(row.pubkey, "use")}
             >
               Use here
             </Button>
@@ -163,6 +189,7 @@ export function InventoryIdentityCard({
             )}
           </>
         )}
+        {(tile || decision.action === "clone") && cloneAction}
       </div>
       {decision.action === "wait" && (
         <p role="status" className="m-0 text-body-sm text-secondary">
@@ -190,6 +217,7 @@ export function InventoryIdentityCard({
                 .join(" · ")}
             </p>
           )}
+          {!tile && decision.action !== "clone" && cloneAction}
           <p
             className="m-0 select-all break-all text-mono-sm"
             data-public-key=""

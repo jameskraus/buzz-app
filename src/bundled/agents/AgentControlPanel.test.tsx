@@ -57,9 +57,26 @@ function setup(
               >
                 Import
               </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onUseHere("cd".repeat(32), "clone", "development")
+                }
+              >
+                Clone
+              </button>
             </article>
             <article aria-label="Agent Fixture agent">
-              <button type="button" onClick={() => onUseHere("ab".repeat(32))}>
+              <button
+                type="button"
+                onClick={() => onUseHere("ab".repeat(32), "clone")}
+              >
+                Clone
+              </button>
+              <button
+                type="button"
+                onClick={() => onUseHere("ab".repeat(32), "use")}
+              >
                 Use here
               </button>
             </article>
@@ -132,6 +149,44 @@ it.each(["retry", "source"])(
   },
 );
 
+it("dialog local-source Clone reads only reviewed text without an import or setup", async () => {
+  const clone = vi.fn(async () => ({
+    name: "Fresh review",
+    systemPrompt: "Reviewed instructions",
+  }));
+  vi.spyOn(communityApi, "communityRequest").mockResolvedValue({
+    identities: [],
+  });
+  const { f } = setup("connected", (fixture) => {
+    fixture.data.parked = [
+      {
+        pubkey: "cd".repeat(32),
+        name: "Not imported",
+        sources: ["installed", "development"],
+      },
+    ];
+    fixture.host.cloneSettings = clone;
+  });
+  const card = await screen.findByRole("article", {
+    name: "Agent Not imported",
+  });
+  fireEvent.click(within(card).getByRole("button", { name: "Clone" }));
+  const review = await screen.findByRole("dialog", {
+    name: "Review agent to clone",
+  });
+  fireEvent.click(within(review).getByRole("button", { name: "Review clone" }));
+  const create = await screen.findByRole("dialog", { name: "Clone agent" });
+  expect(within(create).getByLabelText("Name")).toHaveValue("Fresh review");
+  expect(clone).toHaveBeenCalledWith("development", "cd".repeat(32));
+  expect(
+    f.calls.some((call) =>
+      ["preview", "import", "configure", "localClone", "start"].includes(
+        call.action,
+      ),
+    ),
+  ).toBe(false);
+});
+
 it("dialog actions choose the destination record when several local setups share a key", async () => {
   const request = vi
     .spyOn(communityApi, "communityRequest")
@@ -161,6 +216,17 @@ it("dialog actions choose the destination record when several local setups share
   const card = await screen.findByRole("article", {
     name: "Agent Fixture agent",
   });
+  fireEvent.click(within(card).getByRole("button", { name: "Clone" }));
+  const review = await screen.findByRole("dialog", {
+    name: "Review agent to clone",
+  });
+  fireEvent.click(within(review).getByRole("button", { name: "Review clone" }));
+  const create = await screen.findByRole("dialog", { name: "Clone agent" });
+  expect(within(create).getByLabelText("Name")).toHaveValue("Fixture agent");
+  expect(f.calls.find((call) => call.action === "localClone")?.payload).toEqual(
+    { id: "fixture-agent" },
+  );
+  fireEvent.click(within(create).getByRole("button", { name: "Cancel" }));
   fireEvent.click(within(card).getByRole("button", { name: "Use here" }));
   const setupDialog = await screen.findByRole("dialog", {
     name: "Set up agent here",
@@ -186,6 +252,40 @@ it("dialog actions choose the destination record when several local setups share
       ?.configured,
   ).toBe(false);
   expect(f.agent.enabled).toBe(false);
+});
+
+it("dialog Clone in a third community reads the configured setup the card shows", async () => {
+  vi.spyOn(communityApi, "communityRequest").mockResolvedValue({
+    identities: [],
+  });
+  const { f } = setup("connected", (fixture) => {
+    fixture.data.parked = [];
+    // Use here in B retained the older incomplete import in A before B.
+    fixture.agent.relayUrl = "wss://b.example";
+    fixture.agent.name = "Edited in B";
+    fixture.agent.systemPrompt = "B instructions";
+    fixture.data.agents.unshift({
+      ...structuredClone(fixture.agent),
+      id: "retained-a",
+      relayUrl: "wss://a.example",
+      configured: false,
+      name: "Retained A",
+      systemPrompt: "A instructions",
+    });
+  });
+  const card = await screen.findByRole("article", {
+    name: "Agent Fixture agent",
+  });
+  fireEvent.click(within(card).getByRole("button", { name: "Clone" }));
+  const review = await screen.findByRole("dialog", {
+    name: "Review agent to clone",
+  });
+  fireEvent.click(within(review).getByRole("button", { name: "Review clone" }));
+  const create = await screen.findByRole("dialog", { name: "Clone agent" });
+  expect(within(create).getByLabelText("Name")).toHaveValue("Edited in B");
+  expect(f.calls.find((call) => call.action === "localClone")?.payload).toEqual(
+    { id: "fixture-agent" },
+  );
 });
 
 it("keeps the installation browser available on an older host", async () => {

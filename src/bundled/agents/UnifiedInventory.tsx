@@ -32,7 +32,11 @@ export function UnifiedInventory({
   duplicate?: ((agent: AgentView) => void) | undefined;
   remove?: ((agent: AgentView) => void) | undefined;
   importedId: string | null;
-  onUseHere(pubkey: string): void;
+  onUseHere(
+    pubkey: string,
+    action: "use" | "clone",
+    source?: ImportSource,
+  ): void;
   onImport(pubkey: string, source?: ImportSource): void;
 }) {
   const { agentLibrary: library, archives, profiles } = connection.session;

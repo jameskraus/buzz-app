@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import type {
   AgentControl,
   AgentView,
+  CloneSettings,
   CommunityResolution,
+  ImportSource,
 } from "../../features/agents/control";
 import {
   agentSetupConfirmationAvailable,
@@ -17,19 +19,27 @@ export const agentSetupUnavailableMessage =
 export function LocalInventoryAction({
   control,
   agent,
+  pubkey,
+  source,
+  action,
   destination,
   owner,
   disabled,
   onPending,
   onUsed,
+  onClone,
 }: {
   control: AgentControl;
   agent?: AgentView | undefined;
+  pubkey?: string;
+  source?: ImportSource | undefined;
+  action: "use" | "clone";
   destination: string;
   owner: string;
   disabled: boolean;
   onPending(pending: boolean): void;
   onUsed(): void;
+  onClone(settings: CloneSettings): void;
 }) {
   const active = useRef(true);
   useEffect(() => {
@@ -46,11 +56,12 @@ export function LocalInventoryAction({
   return (
     <>
       <p>
-        Finish setting up this older incomplete import in this community using
-        its existing key. It stays stopped.
+        {action === "use"
+          ? "Finish setting up this older incomplete import in this community using its existing key. It stays stopped. To copy an agent already configured elsewhere, use Clone."
+          : "Review the saved name and instructions before creating a new agent. The original agent does not change."}
       </p>
-      {destination && <p>Destination: {destination}</p>}
-      {(!destination || !owner) && (
+      {action === "use" && destination && <p>Destination: {destination}</p>}
+      {action === "use" && (!destination || !owner) && (
         <p>Connect to the destination community to use this identity there.</p>
       )}
       <Button
@@ -60,20 +71,34 @@ export function LocalInventoryAction({
           onPending(true);
           setError(null);
           try {
-            if (!control.configureHere || !agent)
-              throw new Error("Use here is unavailable.");
-            const resolution = await communityRequest<CommunityResolution>(
-              destination,
-              "resolve-agent-community",
-              {
-                pubkey: agent.pubkey,
-                owner,
-                confirmed: true,
-              },
-            );
-            if (!active.current) return;
-            await control.configureHere(agent.id, resolution);
-            if (active.current) onUsed();
+            if (action === "use") {
+              if (!control.configureHere || !agent)
+                throw new Error("Use here is unavailable.");
+              const resolution = await communityRequest<CommunityResolution>(
+                destination,
+                "resolve-agent-community",
+                {
+                  pubkey: agent.pubkey,
+                  owner,
+                  confirmed: true,
+                },
+              );
+              if (!active.current) return;
+              await control.configureHere(agent.id, resolution);
+              if (active.current) onUsed();
+            } else {
+              const settings =
+                source && pubkey && control.cloneSettings
+                  ? await control.cloneSettings(source, pubkey)
+                  : agent && control.localCloneSettings
+                    ? await control.localCloneSettings(agent.id)
+                    : null;
+              if (!settings)
+                throw new Error(
+                  "Cloning this agent is unavailable in this app version.",
+                );
+              if (active.current) onClone(settings);
+            }
           } catch (reason) {
             if (active.current)
               setError(
@@ -89,7 +114,7 @@ export function LocalInventoryAction({
           }
         }}
       >
-        Use here
+        {action === "use" ? "Use here" : "Review clone"}
       </Button>
       {error && <p role="alert">{error}</p>}
     </>

@@ -2310,6 +2310,10 @@ fn use_here_rejects_configured_other_community_without_writes() {
         .unwrap_err();
     assert!(error.contains("Clone"));
     assert_eq!(fs::read(&path).unwrap(), before);
+    assert_eq!(
+        store.local_clone_settings(&id).unwrap().system_prompt,
+        "test prompt"
+    );
 }
 
 #[test]

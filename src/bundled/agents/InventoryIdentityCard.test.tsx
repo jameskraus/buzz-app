@@ -10,7 +10,9 @@ import {
   render,
   screen,
   within,
+  waitFor,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { createAgentControl } from "../../features/agents/control";
 import { controlFixture } from "../../features/agents/control-testing";
 import { createRelaySession } from "../../features/relay/session";
@@ -134,8 +136,119 @@ it("browses durable parked identities while disconnected without reading old fil
   expect(f.calls.some((call) => call.action === "preview")).toBe(false);
 });
 
+it("offers Clone for a configured other-community setup and keeps its exact controls", async () => {
+  setup("connected", (f) => {
+    f.agent.relayUrl = "wss://elsewhere.example";
+    f.agent.status = "stopped";
+    f.agent.enabled = true;
+  });
+  const card = await screen.findByRole("article", {
+    name: "Agent Fixture agent",
+  });
+  expect(within(card).getByText("Identity & sources")).toBeVisible();
+  // The app runs this setup, so its lifecycle and settings stay reachable here.
+  expect(within(card).getByRole("button", { name: "Start" })).toBeVisible();
+  expect(
+    within(card).getByRole("button", { name: "Actions for Fixture agent" }),
+  ).toBeVisible();
+  expect(within(card).getByRole("button", { name: "Clone" })).toBeEnabled();
+  expect(
+    within(card).queryByRole("button", { name: /^(Import|Use here)$/ }),
+  ).toBeNull();
+  expect(
+    within(card).queryByText("Configured locally · community shown below"),
+  ).toBeNull();
+  expect(
+    within(card).queryByText(/Connect to a destination|Imported locally/),
+  ).toBeNull();
+});
+
+it("makes Import primary and explains how secondary Clone creates a different identity", async () => {
+  setup("connected", (fixture) => {
+    fixture.data.parked = [
+      {
+        pubkey: "cd".repeat(32),
+        name: "Not imported",
+        sources: ["development"],
+      },
+    ];
+    fixture.host.cloneSettings = async () => ({
+      name: "Reviewed agent",
+      systemPrompt: "Instructions",
+    });
+  });
+  const card = screen.getByRole("article", {
+    name: "Agent Not imported",
+  });
+  const importButton = within(card).getByRole("button", { name: "Import" });
+  expect(within(card).getByRole("button", { name: "Clone" })).not.toBeVisible();
+  fireEvent.click(within(card).getByText("Identity & sources"));
+  const cloneButton = within(card).getByRole("button", { name: "Clone" });
+  expect(importButton).toBeEnabled();
+  expect(cloneButton).toBeEnabled();
+  expect(importButton).toHaveAttribute("data-variant", "prominent");
+  expect(cloneButton).toHaveAttribute("data-variant", "subtle");
+  const user = userEvent.setup();
+  await user.hover(importButton);
+  expect(await screen.findByRole("tooltip")).toHaveTextContent(
+    "existing identity and key",
+  );
+  expect(importButton).toHaveAccessibleDescription(/It stays stopped/);
+  await user.unhover(importButton);
+  await user.hover(cloneButton);
+  await waitFor(() =>
+    expect(cloneButton).toHaveAccessibleDescription(
+      /new identity and key.*Memories and history are not copied/,
+    ),
+  );
+});
+
+it.each([
+  [false, false, false, false, false],
+  [false, false, true, true, true],
+  [false, true, false, false, true],
+  [false, true, true, false, true],
+  [true, false, false, false, false],
+  [true, false, true, true, true],
+  [true, true, false, false, true],
+  [true, true, true, false, true],
+])(
+  "card actions: community=%s local=%s oldBuzz=%s => Import=%s Clone=%s",
+  async (community, local, oldBuzz, showImport, showClone) => {
+    const pubkey = "cd".repeat(32);
+    setup(
+      "connected",
+      (f) => {
+        f.data.agents = local
+          ? [
+              {
+                ...f.agent,
+                pubkey,
+                configured: false,
+                relayUrl: "wss://elsewhere.example",
+              },
+            ]
+          : [];
+        f.data.parked = oldBuzz
+          ? [{ pubkey, name: "Not imported", sources: ["installed"] }]
+          : [];
+      },
+      community ? [pubkey] : [],
+    );
+    const card = screen.getByRole("article", { name: "Agent Not imported" });
+    expect(!!within(card).queryByRole("button", { name: "Import" })).toBe(
+      showImport,
+    );
+    fireEvent.click(within(card).getByText("Identity & sources"));
+    expect(!!within(card).queryByRole("button", { name: "Clone" })).toBe(
+      showClone,
+    );
+    expect(screen.queryByText(/No import source confirmed/)).toBeNull();
+  },
+);
+
 it("dispatches the chosen source and exact key without importing credentials", () => {
-  const { f, onImport } = setup("connected", (f) => {
+  const { f, onImport, onUseHere } = setup("connected", (f) => {
     f.host.cloneSettings = vi.fn(async () => ({
       name: "Reviewed agent",
       systemPrompt: "Instructions",
@@ -155,6 +268,13 @@ it("dispatches the chosen source and exact key without importing credentials", (
   });
   fireEvent.click(within(card).getByRole("button", { name: "Import" }));
   expect(onImport).toHaveBeenCalledWith("cd".repeat(32), "development");
+  fireEvent.click(within(card).getByText("Identity & sources"));
+  fireEvent.click(within(card).getByRole("button", { name: "Clone" }));
+  expect(onUseHere).toHaveBeenCalledWith(
+    "cd".repeat(32),
+    "clone",
+    "development",
+  );
   expect(f.host.cloneSettings).not.toHaveBeenCalled();
   expect(f.calls).toEqual([]);
 });

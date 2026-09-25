@@ -1093,6 +1093,16 @@ pub(crate) async fn agent_control_use_here(
     .await
 }
 #[tauri::command]
+pub(crate) async fn agent_control_local_clone_settings(
+    state: tauri::State<'_, AgentHost>,
+    id: String,
+) -> Result<buzz_agent_controller::CloneSettings, String> {
+    run(state.inner().clone(), move |host| {
+        host.controller.local_clone_settings(&id)
+    })
+    .await
+}
+#[tauri::command]
 pub(crate) async fn agent_control_clone_settings(
     state: tauri::State<'_, AgentHost>,
     source: LegacySource,

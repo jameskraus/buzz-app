@@ -50,6 +50,7 @@ fn main() {
             "agent_control_attach_mention",
             "agent_control_import_preview",
             "agent_control_import_commit",
+            "agent_control_local_clone_settings",
             "agent_control_clone_settings",
             "agent_control_use_here",
             "agent_models_begin",

@@ -31,16 +31,22 @@ export function inventoryDecision(
       ? importGroup
       : relayGroup;
   const action =
-    row.localIdentity && row.localSetups.size === 0
-      ? destination
-        ? "use"
-        : "wait"
-      : !row.localIdentity && row.oldBuzzSources.length > 0
-        ? "import"
-        : "unavailable";
+    row.localSetups.size > 0
+      ? configuredHere
+        ? "controls"
+        : "clone"
+      : !row.localIdentity
+        ? row.oldBuzzSources.length > 0
+          ? "import"
+          : "unavailable"
+        : destination
+          ? "use"
+          : "wait";
   const blocked =
     action === "wait"
       ? "Connect to a destination community to set up this identity."
-      : undefined;
+      : action === "unavailable"
+        ? "No import source has been confirmed. Check any discovery warnings."
+        : undefined;
   return { group, action, blocked };
 }

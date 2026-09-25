@@ -34,11 +34,13 @@ it("does not configure after the destination dialog is dismissed during resoluti
     <LocalInventoryAction
       control={control}
       agent={f.agent}
+      action="use"
       destination="https://relay.example.test"
       owner={"de".repeat(32)}
       disabled={false}
       onPending={() => {}}
       onUsed={used}
+      onClone={() => {}}
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "Use here" }));

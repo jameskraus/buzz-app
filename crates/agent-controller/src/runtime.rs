@@ -501,6 +501,9 @@ impl Controller {
         self.store.use_here(id, resolution)?;
         self.snapshot()
     }
+    pub fn local_clone_settings(&self, id: &str) -> Result<crate::CloneSettings> {
+        self.store.local_clone_settings(id)
+    }
     pub fn prepare_import(
         &self,
         imports: &mut crate::Imports,

@@ -222,7 +222,7 @@ function ManagedAgents({
   connection: RelaySnapshot;
   destination: string;
   headerActions: HTMLElement | null;
-  onUseHere(pubkey: string): void;
+  onUseHere(pubkey: string, action: "use" | "clone"): void;
 }) {
   const library = connection.session.agentLibrary;
   const snapshot = useSyncExternalStore(

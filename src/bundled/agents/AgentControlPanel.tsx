@@ -53,7 +53,11 @@ export function AgentControlPanel({
     remove: (agent: AgentView) => void,
     importedId: string | null,
     label: (agent: AgentView) => string,
-    onUseHere: (pubkey: string) => void,
+    onUseHere: (
+      pubkey: string,
+      action: "use" | "clone",
+      source?: ImportSource,
+    ) => void,
     onImport: (pubkey: string, source?: ImportSource) => void,
   ) => ReactNode;
 }) {
@@ -66,7 +70,9 @@ export function AgentControlPanel({
   const [localPending, setLocalPending] = useState(false);
   const [handover, setHandover] = useState<{
     pubkey: string;
+    action: "use" | "clone";
     destination: string;
+    source?: ImportSource;
   } | null>(null);
   useEffect(() => {
     // A handover belongs to the community in which its action was selected.
@@ -131,16 +137,26 @@ export function AgentControlPanel({
       ...facts,
       { pubkey: agent.pubkey, name: agent.name, isAgent: true },
     ]) ?? agent.name;
-  const localSource =
-    handover &&
-    (state.data?.agents.find(
+  const records =
+    state.data?.agents.filter((agent) => agent.pubkey === handover?.pubkey) ??
+    [];
+  const configured = records.filter((agent) => agent.configured !== false);
+  const inDestination = (agents: AgentView[]) =>
+    agents.find(
       (agent) =>
-        agent.pubkey === handover.pubkey &&
         !!agent.relayUrl &&
-        !!handover.destination &&
+        !!handover?.destination &&
         relayOrigin(agent.relayUrl) === relayOrigin(handover.destination),
-    ) ??
-      state.data?.agents.find((agent) => agent.pubkey === handover.pubkey));
+    );
+  // Clone reads the setup the card shows: the destination's configured setup,
+  // else the first configured setup (see localSetups). Use here keeps its own
+  // incomplete-import selection.
+  const cloneSource =
+    handover?.action === "clone"
+      ? (inDestination(configured) ?? configured[0])
+      : undefined;
+  const localSource =
+    handover && (cloneSource ?? inDestination(records) ?? records[0]);
   // Route selection takes precedence over card-local editing. Never guess among
   // multiple native records for the same public identity in this community.
   const routed =
@@ -259,7 +275,13 @@ export function AgentControlPanel({
           remove,
           importedId,
           label,
-          (pubkey) => setHandover({ pubkey, destination: importDestination }),
+          (pubkey, action, source) =>
+            setHandover({
+              pubkey,
+              action,
+              destination: importDestination,
+              ...(source ? { source } : {}),
+            }),
           (pubkey, source) => {
             setImportSelection({
               destination: importDestination,
@@ -358,22 +380,37 @@ export function AgentControlPanel({
               className="buzz-dialog agent-controls agent-dialog text-body"
             >
               <Dialog.Title className="text-heading">
-                Set up agent here
+                {handover.action === "use"
+                  ? "Set up agent here"
+                  : "Review agent to clone"}
               </Dialog.Title>
               <Dialog.Description className="text-body-sm text-secondary">
-                Set up the imported agent in this community. It will not start
-                yet.
+                {handover.action === "use"
+                  ? "Set up the imported agent in this community. It will not start yet."
+                  : "Create a new agent from the saved name and instructions. The new agent gets a new key and does not join any channels automatically."}
               </Dialog.Description>
-              {localSource && state.data.localInventoryActions ? (
+              {(localSource && state.data.localInventoryActions) ||
+              handover.source ? (
                 <LocalInventoryAction
-                  key={`${handover.pubkey}:${handover.destination}:${createOwner}`}
+                  key={`${handover.pubkey}:${handover.action}:${handover.destination}:${createOwner}`}
                   control={control}
                   agent={localSource || undefined}
+                  pubkey={handover.pubkey}
+                  source={handover.source}
+                  action={handover.action}
                   destination={handover.destination}
                   owner={createOwner ?? ""}
                   disabled={nativeState.busy || state.status !== "ready"}
                   onPending={setLocalPending}
                   onUsed={() => setHandover(null)}
+                  onClone={(initialSettings) => {
+                    setHandover(null);
+                    setAdding({
+                      destination: importDestination,
+                      owner: createOwner ?? "",
+                      initialSettings,
+                    });
+                  }}
                 />
               ) : (
                 <p>

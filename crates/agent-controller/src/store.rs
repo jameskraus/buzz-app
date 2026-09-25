@@ -339,6 +339,17 @@ impl Store {
         }
         self.write(&doc)
     }
+    pub fn local_clone_settings(&self, id: &str) -> Result<crate::CloneSettings> {
+        let agent = self
+            .agents()?
+            .into_iter()
+            .find(|agent| agent.id == id)
+            .ok_or("Local identity no longer exists")?;
+        Ok(crate::CloneSettings {
+            name: agent.name,
+            system_prompt: agent.system_prompt,
+        })
+    }
     pub fn save(&mut self, id: &str, revision: u64, edit: AgentEdit) -> Result<()> {
         let mut doc = self.read()?;
         let agent = doc

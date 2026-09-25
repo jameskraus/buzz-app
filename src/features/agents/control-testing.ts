@@ -67,6 +67,12 @@ export function controlFixture() {
       target.configured = true;
       return structuredClone(data);
     },
+    async localCloneSettings(id) {
+      calls.push({ action: "localClone", payload: { id } });
+      const target = data.agents.find((a) => a.id === id);
+      if (!target) throw Error("Missing identity");
+      return { name: target.name, systemPrompt: target.systemPrompt };
+    },
     async snapshot() {
       calls.push({ action: "snapshot" });
       return structuredClone(data);

@@ -37,6 +37,7 @@
     "allow-agent-control-attach-mention",
     "allow-agent-control-import-preview",
     "allow-agent-control-import-commit",
+    "allow-agent-control-local-clone-settings",
     "allow-agent-control-clone-settings",
     "allow-agent-control-use-here",
     "allow-agent-models-begin",

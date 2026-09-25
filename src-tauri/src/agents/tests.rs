@@ -1832,6 +1832,14 @@ fn real_ipc_import_uses_selected_memory_custody_and_stays_disabled() {
         .unwrap()
         .contains_key(selected["id"].as_str().unwrap()));
     assert_eq!(imported["agents"][0]["configured"], true);
+    let cloned = invoke(
+        &view,
+        "agent_control_local_clone_settings",
+        json!({"id": selected["id"]}),
+    )
+    .unwrap();
+    assert!(cloned.get("systemPrompt").is_some());
+    assert_eq!(cloned.as_object().unwrap().len(), 2);
     assert_eq!(imported["agents"][0]["enabled"], false);
     assert_eq!(imported["agents"][0]["status"], "stopped");
     assert!(!imported.to_string().contains(KEY));
