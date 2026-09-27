@@ -44,7 +44,12 @@ const pluginKinds = new Map<number, number>();
 /** Adds a kind to channel windows and live routes until the returned release runs.
  * Channels already open pick it up on their next load. */
 export function registerPluginRowKind(kind: number): () => void {
-  if (!Number.isSafeInteger(kind) || kind < 0 || RESERVED_KINDS.has(kind))
+  if (
+    !Number.isInteger(kind) ||
+    kind < 0 ||
+    kind > 65535 ||
+    RESERVED_KINDS.has(kind)
+  )
     throw new Error(`Kind ${kind} cannot be a plugin timeline kind`);
   pluginKinds.set(kind, (pluginKinds.get(kind) ?? 0) + 1);
   let released = false;

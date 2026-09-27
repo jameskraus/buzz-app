@@ -366,21 +366,26 @@ it("brings a registered timeline kind into reads, folds and rows until the plugi
   expect(foldMessages("c", "relay", [event])).toEqual([]);
   expect(show(row)).toContain("Unsupported item");
 });
-it("refuses timeline kinds the host already folds", async () => {
-  const h = harness({
-    inject: ["conversation"],
-    apply(ctx) {
-      ctx.conversation.registerTimelineKind({
-        id: "chat",
-        title: "Chat",
-        kind: 9,
-        component: Component,
-      });
-    },
-  });
-  h.runtime.reconcile([h.plugin]);
-  await vi.waitFor(() =>
-    expect(h.runtime.snapshot()[h.plugin.manifest.id]?.status).toBe("failed"),
-  );
-  expect(h.service.messages.snapshot()).toHaveLength(0);
-});
+it.each([9, 65536])(
+  "refuses timeline kind %i, which the host folds or relays cannot hold",
+  async (kind) => {
+    const h = harness({
+      inject: ["conversation"],
+      apply(ctx) {
+        ctx.conversation.registerTimelineKind({
+          id: "chat",
+          title: "Chat",
+          kind,
+          component: Component,
+        });
+      },
+    });
+    const kinds = windowFilter("c", null).kinds;
+    h.runtime.reconcile([h.plugin]);
+    await vi.waitFor(() =>
+      expect(h.runtime.snapshot()[h.plugin.manifest.id]?.status).toBe("failed"),
+    );
+    expect(h.service.messages.snapshot()).toHaveLength(0);
+    expect(windowFilter("c", null).kinds).toEqual(kinds);
+  },
+);
