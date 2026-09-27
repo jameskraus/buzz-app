@@ -21,22 +21,23 @@ export const CHANNEL_ACTIVITY_KINDS: readonly number[] = [
   45003,
 ];
 
-/** Kinds the host already reads, folds or routes for channels. */
-const RESERVED_KINDS = new Set([
-  ...CHANNEL_ROW_KINDS,
+/** Core kinds each channel's live route subscribes to. */
+export const CHANNEL_LIVE_KINDS: readonly number[] = [
   ...CHANNEL_ACTIVITY_KINDS,
+  MEMBERSHIP_KIND,
+  40100,
+  40003,
   5,
-  7,
   9005,
-  20002,
+  7,
   39000,
-  39001,
   39002,
   39005,
-  39006,
-  40003,
-  40100,
-]);
+  20002,
+];
+
+/** Kinds the host already reads, folds or routes for channels. */
+const RESERVED_KINDS = new Set([...CHANNEL_LIVE_KINDS, 39001, 39006]);
 /** Plugin-registered row kinds, reference counted by registration. Rows only:
  * never unread, typing, notification or search evidence. */
 const pluginKinds = new Map<number, number>();
@@ -52,10 +53,7 @@ export function registerPluginRowKind(kind: number): () => void {
   )
     throw new Error(`Kind ${kind} cannot be a plugin timeline kind`);
   pluginKinds.set(kind, (pluginKinds.get(kind) ?? 0) + 1);
-  let released = false;
   return () => {
-    if (released) return;
-    released = true;
     const count = (pluginKinds.get(kind) ?? 1) - 1;
     if (count) pluginKinds.set(kind, count);
     else pluginKinds.delete(kind);

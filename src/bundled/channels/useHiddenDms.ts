@@ -187,7 +187,7 @@ export function useHiddenDms(
             const events = await session.read(
               [
                 {
-                  kinds: [...MESSAGE_KINDS],
+                  kinds: MESSAGE_KINDS,
                   "#h": [id],
                   limit: entry.knownIds ? 50 : 100,
                 },

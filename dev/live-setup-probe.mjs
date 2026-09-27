@@ -10,11 +10,11 @@ import { finalizeEvent, getPublicKey, nip19 } from "nostr-tools";
 import { setLogLevel } from "../src/features/developer/logging.ts";
 import { percentile } from "../src/features/developer/client-metrics.ts";
 import {
-  channelKinds,
   LIVE_REPLAY_LIMIT,
   SETUP_CONCURRENCY,
   subscribeRelayTraffic,
 } from "../src/features/relay/live.ts";
+import { CHANNEL_LIVE_KINDS } from "../src/features/relay/kinds.ts";
 
 const CANARY = "probe-canary";
 const ROSTER_LIMIT = 500;
@@ -38,7 +38,7 @@ export function parseStrategy(value) {
   return { name: value, kind, size: count };
 }
 const channelFilter = (channels, since) => ({
-  kinds: channelKinds(),
+  kinds: CHANNEL_LIVE_KINDS,
   "#h": channels,
   since,
   limit: LIVE_REPLAY_LIMIT,

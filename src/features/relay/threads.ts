@@ -386,7 +386,7 @@ export function createThreadView({
           [
             { ids: [rootId], "#h": [channelId], limit: 1 },
             {
-              kinds: [...MESSAGE_KINDS],
+              kinds: MESSAGE_KINDS,
               "#h": [channelId],
               "#e": [rootId],
               depth_limit: 100,

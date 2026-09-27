@@ -56,7 +56,7 @@ export function useSearchMessages(
         .read(
           [
             {
-              kinds: [...MESSAGE_KINDS],
+              kinds: MESSAGE_KINDS,
               search: query,
               search_mode: "prefix",
               limit: 20,
