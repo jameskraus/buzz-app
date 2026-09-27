@@ -317,12 +317,9 @@ it("owns accessories through disable, replacement and failed activation", async 
 it("brings a registered timeline kind into reads, folds and rows until the plugin unloads", async () => {
   const author = keypair();
   const event = signed(author, {
-    kind: 45010,
+    kind: 40006,
     content: JSON.stringify({ title: "Ship it" }),
-    tags: [
-      ["h", "c"],
-      ["d", "issue-1"],
-    ],
+    tags: [["h", "c"]],
   });
   const Card = ({ message }: { message: ChannelMessage }) => (
     <p>Card {JSON.parse(message.content).title}</p>
@@ -331,9 +328,9 @@ it("brings a registered timeline kind into reads, folds and rows until the plugi
     inject: ["conversation"],
     apply(ctx) {
       ctx.conversation.registerTimelineKind({
-        id: "issue",
-        title: "Issue",
-        kind: 45010,
+        id: "scheduled",
+        title: "Scheduled",
+        kind: 40006,
         component: Card,
       });
     },
@@ -353,16 +350,16 @@ it("brings a registered timeline kind into reads, folds and rows until the plugi
   expect(foldMessages("c", "relay", [event])).toEqual([]);
   h.runtime.reconcile([h.plugin]);
   await vi.waitFor(() => expect(h.service.messages.snapshot()).toHaveLength(1));
-  expect(windowFilter("c", null).kinds).toContain(45010);
+  expect(windowFilter("c", null).kinds).toContain(40006);
   const [row] = foldMessages("c", "relay", [event]);
   assert(row);
-  expect(row.plugin).toEqual({ kind: 45010, tags: event.tags });
+  expect(row.plugin).toEqual({ kind: 40006, tags: event.tags });
   const html = show(row);
   expect(html).toContain("Card Ship it");
   expect(html).not.toContain('aria-label="Reply"');
   h.runtime.reconcile([]);
   await vi.waitFor(() => expect(h.service.messages.snapshot()).toHaveLength(0));
-  expect(windowFilter("c", null).kinds).not.toContain(45010);
+  expect(windowFilter("c", null).kinds).not.toContain(40006);
   expect(foldMessages("c", "relay", [event])).toEqual([]);
   expect(show(row)).toContain("Unsupported item");
 });

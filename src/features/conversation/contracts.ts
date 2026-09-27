@@ -89,7 +89,9 @@ export type MessageRenderer = Readonly<{
   component: ComponentType<{ message: ChannelMessage }>;
 }>;
 /** Brings a non-message event kind into channel timelines. The host reads, folds and
- * frames each event as a row (author, time); the component renders only its body. */
+ * frames each event as a row (author, time); the component renders only its body.
+ * The host does not check relay support: pick a channel-scoped (`h`-tagged) kind the
+ * target relay stores, or the timeline simply never receives one. */
 export type TimelineKind = Readonly<{
   id: string;
   title: string;
