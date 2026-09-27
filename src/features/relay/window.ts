@@ -1,4 +1,4 @@
-import { CHANNEL_ROW_KINDS } from "./kinds";
+import { channelRowKinds } from "./kinds";
 import { isObject, objectBody } from "./body";
 import { hasTag, type ReadFilter, type RelayEvent } from "./events";
 
@@ -17,7 +17,7 @@ export function windowFilter(
   limit = WINDOW_PAGE_SIZE,
 ): ReadFilter {
   return {
-    kinds: [...CHANNEL_ROW_KINDS],
+    kinds: channelRowKinds(),
     "#h": [channelId],
     limit: Math.max(1, Math.min(200, limit)),
     top_level: true,

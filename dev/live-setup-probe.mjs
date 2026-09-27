@@ -10,7 +10,7 @@ import { finalizeEvent, getPublicKey, nip19 } from "nostr-tools";
 import { setLogLevel } from "../src/features/developer/logging.ts";
 import { percentile } from "../src/features/developer/client-metrics.ts";
 import {
-  CHANNEL_KINDS,
+  channelKinds,
   LIVE_REPLAY_LIMIT,
   SETUP_CONCURRENCY,
   subscribeRelayTraffic,
@@ -38,7 +38,7 @@ export function parseStrategy(value) {
   return { name: value, kind, size: count };
 }
 const channelFilter = (channels, since) => ({
-  kinds: CHANNEL_KINDS,
+  kinds: channelKinds(),
   "#h": channels,
   since,
   limit: LIVE_REPLAY_LIMIT,

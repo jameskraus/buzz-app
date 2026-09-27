@@ -1,5 +1,6 @@
 import { Context } from "@deepseek-ai/cordis";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, assert, expect, it, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
 import { PluginRuntime } from "../../plugins/runtime";
 import { ConversationService } from "./service";
 import { inlineMatches } from "./InlineText";
@@ -10,6 +11,9 @@ import type { Contribution } from "../../plugins/contributions";
 import * as emoji from "../../bundled/emoji";
 import * as mentions from "../../bundled/mentions";
 import * as links from "../../bundled/links";
+import { foldMessages } from "../relay/fold";
+import { keypair, signed } from "../relay/testing";
+import { windowFilter } from "../relay/window";
 
 const Component = () => null;
 const cleanups: (() => Promise<unknown>)[] = [];
@@ -309,4 +313,74 @@ it("owns accessories through disable, replacement and failed activation", async 
     ),
   );
   expect(broken.service.accessories.snapshot()).toHaveLength(0);
+});
+it("brings a registered timeline kind into reads, folds and rows until the plugin unloads", async () => {
+  const author = keypair();
+  const event = signed(author, {
+    kind: 45010,
+    content: JSON.stringify({ title: "Ship it" }),
+    tags: [
+      ["h", "c"],
+      ["d", "issue-1"],
+    ],
+  });
+  const Card = ({ message }: { message: ChannelMessage }) => (
+    <p>Card {JSON.parse(message.content).title}</p>
+  );
+  const h = harness({
+    inject: ["conversation"],
+    apply(ctx) {
+      ctx.conversation.registerTimelineKind({
+        id: "issue",
+        title: "Issue",
+        kind: 45010,
+        component: Card,
+      });
+    },
+  });
+  const show = (row: ChannelMessage) =>
+    renderToStaticMarkup(
+      <h.service.ui.Message
+        row={row}
+        profile={undefined}
+        media={() => undefined}
+        onOpenLink={() => false}
+        onOpenThread={() => {}}
+        day={false}
+        retry={undefined}
+      />,
+    );
+  expect(foldMessages("c", "relay", [event])).toEqual([]);
+  h.runtime.reconcile([h.plugin]);
+  await vi.waitFor(() => expect(h.service.messages.snapshot()).toHaveLength(1));
+  expect(windowFilter("c", null).kinds).toContain(45010);
+  const [row] = foldMessages("c", "relay", [event]);
+  assert(row);
+  expect(row.plugin).toEqual({ kind: 45010, tags: event.tags });
+  const html = show(row);
+  expect(html).toContain("Card Ship it");
+  expect(html).not.toContain('aria-label="Reply"');
+  h.runtime.reconcile([]);
+  await vi.waitFor(() => expect(h.service.messages.snapshot()).toHaveLength(0));
+  expect(windowFilter("c", null).kinds).not.toContain(45010);
+  expect(foldMessages("c", "relay", [event])).toEqual([]);
+  expect(show(row)).toContain("Unsupported item");
+});
+it("refuses timeline kinds the host already folds", async () => {
+  const h = harness({
+    inject: ["conversation"],
+    apply(ctx) {
+      ctx.conversation.registerTimelineKind({
+        id: "chat",
+        title: "Chat",
+        kind: 9,
+        component: Component,
+      });
+    },
+  });
+  h.runtime.reconcile([h.plugin]);
+  await vi.waitFor(() =>
+    expect(h.runtime.snapshot()[h.plugin.manifest.id]?.status).toBe("failed"),
+  );
+  expect(h.service.messages.snapshot()).toHaveLength(0);
 });

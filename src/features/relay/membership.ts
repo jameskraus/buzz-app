@@ -50,7 +50,7 @@ export function messagePreview(
 ): string | undefined {
   for (let i = rows.length - 1; i >= 0; i--) {
     const row = rows[i];
-    if (row && !row.membership)
+    if (row && !row.membership && !row.plugin)
       return row.diff
         ? `Diff: ${row.diff.filePath || "patch"}${row.diff.description ? ` — ${row.diff.description}` : ""}`
         : row.content;

@@ -1,4 +1,4 @@
-import { CHANNEL_ROW_KINDS, channelRowKind, isMessageKind } from "./kinds";
+import { channelRowKind, isMessageKind } from "./kinds";
 import { rowProfileIds, messagePreview } from "./membership";
 import type { Outbox } from "./outbox";
 import { MessageProjection } from "./message-projection";
@@ -1579,9 +1579,8 @@ export function createChannelStore(
         for (const event of events) {
           if (
             incomingIds.has(event.id) ||
-            ![...CHANNEL_ROW_KINDS, 40003, 5, 9005, 7, 39005].includes(
-              event.kind,
-            )
+            (!channelRowKind(event.kind) &&
+              ![40003, 5, 9005, 7, 39005].includes(event.kind))
           )
             continue;
           if (

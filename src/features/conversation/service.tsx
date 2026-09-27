@@ -2,6 +2,7 @@
 import type { ReactNode } from "react";
 import { Service, type Context } from "@deepseek-ai/cordis";
 import { createContributions } from "../../plugins/contributions";
+import { registerPluginRowKind } from "../relay/kinds";
 import {
   MessageComposer,
   type MessageComposerProps,
@@ -15,11 +16,13 @@ import type {
   LinkRenderer,
   MessageRenderer,
   ContributionReader,
+  TimelineKind,
 } from "./contracts";
 
 export type Conversation = {
   messages: ContributionReader<MessageRenderer>;
   registerMessage(renderer: MessageRenderer): void;
+  registerTimelineKind(kind: TimelineKind): void;
   accessories: ContributionReader<ComposerAccessory>;
   registerAccessory(accessory: ComposerAccessory): void;
   tools: ContributionReader<ComposerTool>;
@@ -47,7 +50,8 @@ function validate(
     | ComposerCompletion
     | ComposerAccessory
     | LinkRenderer
-    | MessageRenderer,
+    | MessageRenderer
+    | TimelineKind,
 ) {
   if (
     !value ||
@@ -108,6 +112,21 @@ export class ConversationService extends Service implements Conversation {
     if (typeof value.matches !== "function")
       throw new Error("A message renderer needs a matcher");
     this.messageEntries.register(this.ctx, value);
+  }
+  /** Timeline rows of `kind` render through `component`, like a message renderer. */
+  registerTimelineKind(value: TimelineKind) {
+    validate(value);
+    const { kind, component } = value;
+    this.ctx.effect(
+      () => registerPluginRowKind(kind),
+      `conversation.timeline-kind:${value.id}`,
+    );
+    this.messageEntries.register(this.ctx, {
+      id: value.id,
+      title: value.title,
+      matches: (message) => message.plugin?.kind === kind,
+      component,
+    });
   }
   registerAccessory(value: ComposerAccessory) {
     validate(value);

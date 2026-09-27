@@ -88,6 +88,14 @@ export type MessageRenderer = Readonly<{
   matches(message: ChannelMessage): boolean;
   component: ComponentType<{ message: ChannelMessage }>;
 }>;
+/** Brings a non-message event kind into channel timelines. The host reads, folds and
+ * frames each event as a row (author, time); the component renders only its body. */
+export type TimelineKind = Readonly<{
+  id: string;
+  title: string;
+  kind: number;
+  component: ComponentType<{ message: ChannelMessage }>;
+}>;
 export type ConversationExtensions = Readonly<{
   messages?: ContributionReader<MessageRenderer>;
   accessories?: ContributionReader<ComposerAccessory>;

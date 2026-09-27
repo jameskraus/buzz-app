@@ -94,6 +94,9 @@ export type ChannelMessage = Readonly<{
     truncated: boolean;
   }>;
   membership?: MembershipChange;
+  /** A plugin-registered timeline kind. `content` is the raw event content;
+   * the registering plugin owns presentation. Never edited, reacted or replied to. */
+  plugin?: Readonly<{ kind: number; tags: readonly (readonly string[])[] }>;
   /** Current body came from a replacement edit; original recipients do not bind its prose. */
   edited?: true;
   /** Attachment removal changed the signed body; new text adjacency cannot bind identities. */

@@ -13,7 +13,11 @@ import {
 import type { EventTemplate, VerifiedEvent } from "nostr-tools";
 import { eventDto } from "./events.ts";
 import { EMOJI_SET } from "./emoji.ts";
-import { CHANNEL_ACTIVITY_KINDS, MEMBERSHIP_KIND } from "./kinds.ts";
+import {
+  CHANNEL_ACTIVITY_KINDS,
+  MEMBERSHIP_KIND,
+  pluginRowKinds,
+} from "./kinds.ts";
 
 export const LIVE_CHANNEL_CAPACITY = 1022; // Reserve two of the relay's 1024 slots.
 export const LIVE_REPLAY_LIMIT = 500;
@@ -144,7 +148,7 @@ type Route = {
   quotaRetries: number;
   deadline?: ReturnType<typeof setTimeout>;
 };
-export const CHANNEL_KINDS = [
+export const channelKinds = () => [
   ...CHANNEL_ACTIVITY_KINDS,
   MEMBERSHIP_KIND,
   40100,
@@ -156,6 +160,7 @@ export const CHANNEL_KINDS = [
   39002,
   39005,
   20002,
+  ...pluginRowKinds(),
 ];
 /** One authenticated socket, independently established channel routes and two explicit globals.
  * Recent replay is opportunistic: finite reads own catch-up and history bounds. */
@@ -365,7 +370,7 @@ export function subscribeRelayTraffic(
       active++;
       if (route.id === "observer") route.since = Math.floor(Date.now() / 1000);
       const scope = route.channelId
-        ? { kinds: CHANNEL_KINDS, "#h": [route.channelId] }
+        ? { kinds: channelKinds(), "#h": [route.channelId] }
         : route.id === "profiles"
           ? { kinds: [0, 10100, 30177] }
           : route.id === "observer"

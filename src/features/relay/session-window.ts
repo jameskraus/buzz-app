@@ -1,6 +1,6 @@
 import { byteSize } from "./budget";
 import { hasTag, type ReadFilter, type RelayEvent } from "./events";
-import { CHANNEL_ROW_KINDS } from "./kinds";
+import { channelRowKind, channelRowKinds } from "./kinds";
 import type { ReadOptions, RelayReader } from "./reader";
 import { WINDOW_PAGE_SIZE, type WindowCursor, type WindowPage } from "./window";
 
@@ -32,7 +32,7 @@ export async function readSessionWindow(
   const response = await reader.read(
     [
       {
-        kinds: [...CHANNEL_ROW_KINDS],
+        kinds: channelRowKinds(),
         "#h": [channelId],
         limit: WINDOW_PAGE_SIZE,
         ...paging(cursor),
@@ -42,8 +42,7 @@ export async function readSessionWindow(
   );
   const rows = [...new Map(response.map((event) => [event.id, event])).values()]
     .filter(
-      (event) =>
-        CHANNEL_ROW_KINDS.includes(event.kind) && hasTag(event, "h", channelId),
+      (event) => channelRowKind(event.kind) && hasTag(event, "h", channelId),
     )
     .sort(compare);
   if (rows.some((event) => cursor && !after(event, cursor)))

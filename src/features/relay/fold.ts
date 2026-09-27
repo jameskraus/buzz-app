@@ -17,7 +17,7 @@ import {
   safeMessageUrl,
 } from "./message-content";
 
-import { channelRowKind, MEMBERSHIP_KIND } from "./kinds";
+import { channelRowKind, MEMBERSHIP_KIND, pluginRowKind } from "./kinds";
 import { membershipChange } from "./membership";
 import { compareMessages, eventMs } from "./message-order";
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -229,6 +229,30 @@ export function foldMessages(
       continue;
     const aux = overlays.get(event.id) ?? [];
     if (deleted(event)) continue;
+    if (pluginRowKind(event.kind)) {
+      rows.push(
+        Object.freeze({
+          id: event.id,
+          channelId,
+          authorId: event.pubkey,
+          createdAt: event.created_at,
+          createdAtMs: eventMs(event),
+          content: event.content,
+          plugin: Object.freeze({
+            kind: event.kind,
+            tags: Object.freeze(
+              event.tags.map((tag) => Object.freeze([...tag])),
+            ),
+          }),
+          mentions: Object.freeze([]),
+          attachments: Object.freeze([]),
+          reactions: Object.freeze([]),
+          replyCount: 0,
+          participants: Object.freeze([]),
+        }),
+      );
+      continue;
+    }
     if (event.kind === MEMBERSHIP_KIND) {
       const membership = membershipChange(event, relayAuthor);
       if (membership)
