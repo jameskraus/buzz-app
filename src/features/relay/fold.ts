@@ -17,7 +17,8 @@ import {
   safeMessageUrl,
 } from "./message-content";
 
-import { channelRowKind, membershipChange } from "./membership";
+import { channelRowKind, MEMBERSHIP_KIND } from "./kinds";
+import { membershipChange } from "./membership";
 import { compareMessages, eventMs } from "./message-order";
 const HEX64 = /^[0-9a-f]{64}$/;
 
@@ -228,7 +229,7 @@ export function foldMessages(
       continue;
     const aux = overlays.get(event.id) ?? [];
     if (deleted(event)) continue;
-    if (event.kind === 40099) {
+    if (event.kind === MEMBERSHIP_KIND) {
       const membership = membershipChange(event, relayAuthor);
       if (membership)
         rows.push(

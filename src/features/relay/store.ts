@@ -1,4 +1,5 @@
-import { channelRowKind, rowProfileIds, messagePreview } from "./membership";
+import { CHANNEL_ROW_KINDS, channelRowKind, isMessageKind } from "./kinds";
+import { rowProfileIds, messagePreview } from "./membership";
 import type { Outbox } from "./outbox";
 import { MessageProjection } from "./message-projection";
 import { createRelayProfiler, type RelayProfiler } from "./profiling";
@@ -245,7 +246,7 @@ export function createChannelStore(
       const ids = new Set(combined.keys());
       for (const item of local?.snapshot() ?? [])
         if (
-          [9, 40002, 40008].includes(item.event.kind) &&
+          isMessageKind(item.event.kind) &&
           item.event.tags.some(
             (tag) => tag[0] === "h" && tag[1] === state.channelId,
           )
@@ -259,10 +260,7 @@ export function createChannelStore(
         ),
       );
       for (const item of operations) {
-        if (
-          item.delivery === "failed" &&
-          ![9, 40002, 40008].includes(item.event.kind)
-        )
+        if (item.delivery === "failed" && !isMessageKind(item.event.kind))
           continue;
         combined.set(item.event.id, item.event);
       }
@@ -1510,7 +1508,7 @@ export function createChannelStore(
           (item) =>
             next.has(item.event.id) &&
             item.delivery !== "seen" &&
-            [9, 40002, 40008].includes(item.event.kind),
+            isMessageKind(item.event.kind),
         )
       )
         touch(channelId);
@@ -1528,9 +1526,7 @@ export function createChannelStore(
         continue;
       setWindow(state, {});
       const newMessages = changed.filter(
-        (item) =>
-          [9, 40002, 40008].includes(item.event.kind) &&
-          item.delivery === "sending",
+        (item) => isMessageKind(item.event.kind) && item.delivery === "sending",
       );
       if (newMessages.length)
         void fetchProfiles(state.snapshot.rows.slice(-12));
@@ -1583,7 +1579,7 @@ export function createChannelStore(
         for (const event of events) {
           if (
             incomingIds.has(event.id) ||
-            ![9, 40002, 40008, 40099, 40003, 5, 9005, 7, 39005].includes(
+            ![...CHANNEL_ROW_KINDS, 40003, 5, 9005, 7, 39005].includes(
               event.kind,
             )
           )

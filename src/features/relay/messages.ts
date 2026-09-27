@@ -2,6 +2,7 @@ import { attachmentMessage, type UploadedAttachment } from "./attachments";
 import { validReactionContent, type CustomEmoji } from "./emoji";
 import type { EventTemplate } from "nostr-tools";
 import type { EventData } from "./events";
+import { isMessageKind } from "./kinds";
 import type { Outbox, OutboxRecovery } from "./outbox";
 
 /** NIP-56 types accepted by the Buzz relay for message reports. */
@@ -152,7 +153,7 @@ export function createMessages(
     },
     react(messageId: string, content: string, emoji?: CustomEmoji) {
       const original = find(messageId);
-      if (!original || ![9, 40002, 40008].includes(original.kind))
+      if (!original || !isMessageKind(original.kind))
         throw new Error("Load the message before reacting to it");
       const channelId = original.tags.find((tag) => tag[0] === "h")?.[1];
       if (!channelId) throw new Error("Message has no channel");
@@ -212,7 +213,7 @@ export function createMessages(
     report: publishReport
       ? (messageId: string, type: ReportType, note = "") => {
           const original = find(messageId);
-          if (!original || ![9, 40002, 40008].includes(original.kind))
+          if (!original || !isMessageKind(original.kind))
             return Promise.reject(
               new Error("Load the message before reporting it"),
             );

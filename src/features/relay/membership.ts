@@ -1,11 +1,7 @@
 import type { ChannelMessage, MembershipChange } from "./contracts";
 import type { EventData } from "./events";
 import { objectBody } from "./body";
-
-/** Content rows retained by channel history/live windows, not the unread kind set. */
-export const CHANNEL_ROW_KINDS = [9, 40002, 40008, 40099];
-export const channelRowKind = (kind: number) =>
-  CHANNEL_ROW_KINDS.includes(kind);
+import { MEMBERSHIP_KIND } from "./kinds";
 const pubkey = (value: unknown): value is string =>
   typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
 
@@ -14,7 +10,7 @@ export function membershipChange(
   event: EventData,
   relayAuthor: string,
 ): MembershipChange | undefined {
-  if (event.kind !== 40099 || event.pubkey !== relayAuthor) return;
+  if (event.kind !== MEMBERSHIP_KIND || event.pubkey !== relayAuthor) return;
   const body = objectBody(event.content);
   if (!body || !pubkey(body.actor)) return;
   if (body.type === "member_left") {

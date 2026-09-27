@@ -1,6 +1,6 @@
 import type { RelayEvent } from "./events";
+import { CHANNEL_ACTIVITY_KINDS } from "./kinds";
 
-export const CHANNEL_ACTIVITY_KINDS = [9, 40002, 40008, 45001, 45003] as const;
 const CHANNEL_BATCH = 128;
 export type ChannelActivityReader = (
   channelIds: readonly string[],
@@ -35,7 +35,7 @@ export function createChannelActivity(
     if (closed) return;
     let changed = false;
     for (const event of events) {
-      if (!CHANNEL_ACTIVITY_KINDS.includes(event.kind as never)) continue;
+      if (!CHANNEL_ACTIVITY_KINDS.includes(event.kind)) continue;
       const channelId = channelOf(event);
       if (!channelId || event.created_at <= (values.get(channelId) ?? -1))
         continue;
@@ -78,7 +78,7 @@ export function createChannelActivity(
             if (
               channelId &&
               batch.includes(channelId) &&
-              CHANNEL_ACTIVITY_KINDS.includes(event.kind as never) &&
+              CHANNEL_ACTIVITY_KINDS.includes(event.kind) &&
               event.created_at > (refreshed.get(channelId) ?? -1)
             )
               refreshed.set(channelId, event.created_at);

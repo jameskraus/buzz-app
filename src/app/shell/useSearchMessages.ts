@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { objectBody } from "../../features/relay/body";
+import { isMessageKind, MESSAGE_KINDS } from "../../features/relay/kinds";
 import type { RelaySession } from "../../features/relay/session";
 
 export type SearchMessage = Readonly<{
@@ -55,7 +56,7 @@ export function useSearchMessages(
         .read(
           [
             {
-              kinds: [9, 40002, 40008],
+              kinds: [...MESSAGE_KINDS],
               search: query,
               search_mode: "prefix",
               limit: 20,
@@ -70,7 +71,7 @@ export function useSearchMessages(
             const destinations = event.tags.filter(([name]) => name === "h");
             const channelId = destinations[0]?.[1];
             if (
-              ![9, 40002, 40008].includes(event.kind) ||
+              !isMessageKind(event.kind) ||
               destinations.length !== 1 ||
               !channelId ||
               (scopedChannelId && channelId !== scopedChannelId) ||

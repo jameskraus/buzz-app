@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RelaySession } from "../../features/relay/session";
+import { isMessageKind, MESSAGE_KINDS } from "../../features/relay/kinds";
 import type { ChannelList } from "../../features/relay/contracts";
 import { readView, writeView } from "../../shared/view-state";
 
@@ -144,8 +145,7 @@ export function useHiddenDms(
       show(messages.map((message) => message.channelId)),
     );
     const stopOutgoing = session.outbox?.observeSend((event) => {
-      if (event.kind !== 9 && event.kind !== 40002 && event.kind !== 40008)
-        return;
+      if (!isMessageKind(event.kind)) return;
       const destinations = event.tags.filter(([name]) => name === "h");
       const id = destinations.length === 1 ? destinations[0]?.[1] : undefined;
       const hiddenAtSend = current.current.find((entry) => entry.id === id);
@@ -187,7 +187,7 @@ export function useHiddenDms(
             const events = await session.read(
               [
                 {
-                  kinds: [9, 40002, 40008],
+                  kinds: [...MESSAGE_KINDS],
                   "#h": [id],
                   limit: entry.knownIds ? 50 : 100,
                 },

@@ -5,7 +5,7 @@ import { eventDto, type EventData, type RelayEvent } from "./events";
 import type { RelayWriter } from "./transport";
 import { ByteLru, byteSize, OUTBOX_INPUT_MAX_BYTES } from "./budget";
 import { createRelayProfiler, type RelayProfiler } from "./profiling";
-import { channelRowKind } from "./membership";
+import { channelRowKind } from "./kinds";
 import { MessageClock } from "./message-order";
 
 export type Delivery = "sending" | "accepted" | "unknown" | "failed" | "seen";

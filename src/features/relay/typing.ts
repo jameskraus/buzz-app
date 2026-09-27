@@ -1,5 +1,6 @@
 import type { RelayEvent } from "./events";
 import { threadReference } from "./thread-reference";
+import { isMessageKind } from "./kinds";
 
 const ACTIVITY_LIFETIME_MS = 8_000;
 const POST_MESSAGE_QUIET_MS = 2_000;
@@ -149,8 +150,7 @@ export function createTyping(
     // At capacity, drop new scopes rather than evict that evidence.
     expireSilence(now);
     for (const event of events) {
-      if (event.kind === 9 || event.kind === 40002 || event.kind === 40008)
-        receive(event, now);
+      if (isMessageKind(event.kind)) receive(event, now);
     }
     // Completion wins even when activity came first in the batch.
     if (live) {

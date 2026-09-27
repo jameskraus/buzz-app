@@ -4,7 +4,7 @@ import { foldMessages } from "./fold";
 import type { OutgoingEvent } from "./outbox";
 import type { RelayProfiler } from "./profiling";
 
-import { channelRowKind as messageKind } from "./membership";
+import { channelRowKind as messageKind } from "./kinds";
 import { compareMessages, eventMs, MessageClock } from "./message-order";
 const PARENT_OVERLAY_DEPTH = 2;
 const CHILD_OVERLAY_DEPTH = 1;

@@ -1,4 +1,4 @@
-import { CHANNEL_ROW_KINDS } from "./membership";
+import { CHANNEL_ROW_KINDS } from "./kinds";
 import { isObject, objectBody } from "./body";
 import { hasTag, type ReadFilter, type RelayEvent } from "./events";
 

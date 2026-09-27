@@ -1,8 +1,6 @@
 import { assert, expect, it, vi } from "vitest";
-import {
-  createChannelActivity,
-  CHANNEL_ACTIVITY_KINDS,
-} from "./channel-activity";
+import { createChannelActivity } from "./channel-activity";
+import { CHANNEL_ACTIVITY_KINDS } from "./kinds";
 import { flush, keypair, message, signed } from "./testing";
 
 const forumActivity = (

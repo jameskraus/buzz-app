@@ -39,6 +39,7 @@ import {
 } from "./http-admission";
 import { yieldToHost } from "./yield";
 import { clientMetrics } from "../developer/client-metrics";
+import { CHANNEL_ACTIVITY_KINDS } from "./kinds";
 import { createRelayProfiler, type RelayProfiler } from "./profiling";
 import {
   subscribeRelayTraffic,
@@ -874,7 +875,7 @@ export async function connectBrokerTransport(
                 },
                 body: JSON.stringify(
                   channelIds.map((channelId) => ({
-                    kinds: [9, 40002, 40008, 45001, 45003],
+                    kinds: [...CHANNEL_ACTIVITY_KINDS],
                     "#h": [channelId],
                     limit: 1,
                   })),

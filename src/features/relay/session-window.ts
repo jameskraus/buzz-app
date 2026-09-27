@@ -1,6 +1,6 @@
 import { byteSize } from "./budget";
 import { hasTag, type ReadFilter, type RelayEvent } from "./events";
-import { CHANNEL_ROW_KINDS } from "./membership";
+import { CHANNEL_ROW_KINDS } from "./kinds";
 import type { ReadOptions, RelayReader } from "./reader";
 import { WINDOW_PAGE_SIZE, type WindowCursor, type WindowPage } from "./window";
 
