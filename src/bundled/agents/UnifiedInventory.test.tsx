@@ -15,6 +15,7 @@ import {
 } from "@testing-library/react";
 import type { ClientSnapshot } from "../../features/communities/service";
 import * as communityApi from "../../features/communities/api";
+import * as destinations from "../../features/communities/destination";
 import { createAgentControl } from "../../features/agents/control";
 import { controlFixture } from "../../features/agents/control-testing";
 import { createRelaySession } from "../../features/relay/session";
@@ -353,6 +354,39 @@ const joined = (ids: string[], viewer = "de".repeat(32)): ClientSnapshot => ({
   profile: { name: "", picture: "" },
   selected: null,
   memberships: ids.map((id) => ({ id, name: id })),
+});
+it("discovers an unselected configured membership alias by its origin", async () => {
+  const resolve = destinations.communityDestination;
+  vi.spyOn(destinations, "communityDestination").mockImplementation((id) =>
+    resolve(id, { primary: "https://unvisited.example" }),
+  );
+  const key = "fa".repeat(32);
+  const request = vi
+    .spyOn(communityApi, "communityRequest")
+    .mockImplementation(async (_id, route) =>
+      route === "query" ? [] : { identities: [key] },
+    );
+  const client = joined(["primary", "wss://unvisited.example"]);
+  setup(
+    "connected",
+    (f) => {
+      f.data.agents = [];
+      f.data.parked = [];
+    },
+    [],
+    [],
+    client,
+  );
+  expect(
+    await screen.findByRole("article", { name: `Agent ${key.slice(0, 12)}` }),
+  ).toBeVisible();
+  expect(
+    request.mock.calls
+      .filter(([, route]) => route === "agent-inventory")
+      .map(([id]) => id),
+  ).toEqual(["https://unvisited.example"]);
+  expect(client.memberships[0]?.id).toBe("primary");
+  expect(client.selected).toBeNull();
 });
 it("reads unvisited joined communities, deduplicates identities, and retries only discovery after partial failure", async () => {
   const key = "fa".repeat(32);

@@ -2,7 +2,7 @@ import { communityProfiles } from "./community-profiles";
 import type { Profile } from "../../features/relay/contracts";
 import { useEffect, useState } from "react";
 import { communityRequest } from "../../features/communities/api";
-import { relayOrigin } from "../../features/communities/destination";
+import { communityDestination } from "../../features/communities/destination";
 import type { ClientSnapshot } from "../../features/communities/service";
 import type { RelaySnapshot } from "../../features/relay/service";
 
@@ -27,7 +27,7 @@ export function useCommunityInventory(
   const communities = [
     ...new Set(
       client
-        ? client.memberships.map((m) => relayOrigin(m.id))
+        ? client.memberships.map((m) => communityDestination(m.id).url)
         : destination
           ? [destination]
           : [],
