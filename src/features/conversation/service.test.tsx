@@ -3,6 +3,7 @@ import { afterEach, assert, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PluginRuntime } from "../../plugins/runtime";
 import { ConversationService } from "./service";
+import { useRenderableRows } from "./MessageBody";
 import { inlineMatches } from "./InlineText";
 import type { PluginModule } from "../../plugins/api";
 import type { ChannelMessage } from "../relay/contracts";
@@ -362,6 +363,40 @@ it("brings a registered timeline kind into reads, folds and rows until the plugi
   expect(windowFilter("c", null).kinds).not.toContain(40006);
   expect(foldMessages("c", "relay", [event])).toEqual([]);
   expect(show(row)).toContain("Unsupported item");
+});
+it("leaves out timeline rows the plugin declines or no loaded plugin renders", async () => {
+  const author = keypair();
+  const events = [true, false].map((show, index) =>
+    signed(author, {
+      kind: 40007,
+      content: JSON.stringify({ show }),
+      tags: [["h", "c"]],
+      created_at: 100 + index,
+    }),
+  );
+  const h = harness({
+    inject: ["conversation"],
+    apply(ctx) {
+      ctx.conversation.registerTimelineKind({
+        id: "optional",
+        title: "Optional",
+        kind: 40007,
+        matches: (message) => JSON.parse(message.content).show,
+        component: () => <p>Shown</p>,
+      });
+    },
+  });
+  h.runtime.reconcile([h.plugin]);
+  await vi.waitFor(() => expect(h.service.messages.snapshot()).toHaveLength(1));
+  const rows = foldMessages("c", "relay", events);
+  expect(rows).toHaveLength(2);
+  const Shown = () => (
+    <>{useRenderableRows(h.service.messages, rows).map((row) => row.id)}</>
+  );
+  expect(renderToStaticMarkup(<Shown />)).toBe(events[0]?.id);
+  h.runtime.reconcile([]);
+  await vi.waitFor(() => expect(h.service.messages.snapshot()).toHaveLength(0));
+  expect(renderToStaticMarkup(<Shown />)).toBe("");
 });
 it.each([9, 65536])(
   "refuses timeline kind %i, which the host folds or relays cannot hold",

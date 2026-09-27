@@ -116,6 +116,8 @@ export class ConversationService extends Service implements Conversation {
   /** Timeline rows of `kind` render through `component`, like a message renderer. */
   registerTimelineKind(value: TimelineKind) {
     validate(value);
+    if (value.matches !== undefined && typeof value.matches !== "function")
+      throw new Error("A timeline kind matcher must be a function");
     const { kind, component } = value;
     this.ctx.effect(
       () => registerPluginRowKind(kind),
@@ -124,7 +126,8 @@ export class ConversationService extends Service implements Conversation {
     this.messageEntries.register(this.ctx, {
       id: value.id,
       title: value.title,
-      matches: (message) => message.plugin?.kind === kind,
+      matches: (message) =>
+        message.plugin?.kind === kind && (value.matches?.(message) ?? true),
       component,
     });
   }

@@ -4,6 +4,7 @@ import { Button } from "../../shared/design-system/ui/Button";
 import { MembershipRow } from "./MembershipRow";
 import { membershipRows } from "./membership-rows";
 import type { ConversationExtensions } from "../conversation/contracts";
+import { useRenderableRows } from "../conversation/MessageBody";
 import type { RelaySession } from "../relay/session";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Virtualizer, type VirtualizerHandle } from "virtua";
@@ -125,14 +126,15 @@ function Timeline({
   );
   const savedPosition = useRef(initialPosition);
   const restoredAnchor = useRef<string | undefined>(undefined);
-  const rows = useMemo(() => membershipRows(window.rows), [window.rows]);
+  const shown = useRenderableRows(extensions?.messages, window.rows);
+  const rows = useMemo(() => membershipRows(shown), [shown]);
   const resolveName = useChannelIdentityNames(queries, channelId);
   const profiles = useRowProfiles(queries.profiles, window.rows);
   const agentPubkeys = useKnownAgentPubkeys(queries, profiles);
   const [geometry] = useState(() => geometryFor(queries.channels));
   const signature = useMemo(
-    () => geometrySignature(window.rows, profiles, resolveName),
-    [window.rows, profiles, resolveName],
+    () => geometrySignature(shown, profiles, resolveName),
+    [shown, profiles, resolveName],
   );
   const [focusedMessageId, setFocusedMessageId] = useState<string>();
   const [pinnedIds, setPinnedIds] = useState<ReadonlySet<string>>(
