@@ -45,7 +45,9 @@ export function useReading({
       return [...element.querySelectorAll<HTMLElement>("[data-message-id]")]
         .flatMap((row) => {
           const bounds = row.getBoundingClientRect();
+          // Membership and plugin rows are not messages the unread engine can mark read.
           return row.dataset.membershipRow === undefined &&
+            row.dataset.pluginRow === undefined &&
             row.dataset.messageId &&
             bounds.height > 0 &&
             bounds.width > 0 &&

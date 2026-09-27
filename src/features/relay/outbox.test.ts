@@ -1,5 +1,6 @@
 import { assert, afterEach, expect, it, vi } from "vitest";
 import { createRelaySession } from "./session";
+import { registerPluginRowKind } from "./kinds";
 import {
   PublishRejected,
   createOutbox,
@@ -983,4 +984,17 @@ it("does not replay a guarded addition through generic retry or after hydration"
   expect(restored.publish).not.toHaveBeenCalled();
   restored.outbox.retry(id, () => true); // Explicit renewed admission may reuse the exact event.
   await vi.waitFor(() => expect(restored.sign).toHaveBeenCalledOnce());
+});
+it("plugin row kinds are written exactly as given, without message ordering tags", () => {
+  const release = registerPluginRowKind(40006);
+  try {
+    const h = setup();
+    h.outbox.send({ kind: 40006, content: "{}", tags: [["h", "c"]] });
+    h.send();
+    const [plugin, core] = h.outbox.snapshot().map((item) => item.event);
+    expect(plugin?.tags.map(([name]) => name)).toEqual(["h", "client-id"]);
+    expect(core?.tags.map(([name]) => name)).toContain("ms");
+  } finally {
+    release();
+  }
 });

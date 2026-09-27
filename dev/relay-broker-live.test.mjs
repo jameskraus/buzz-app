@@ -932,6 +932,35 @@ test("production interest controls preserve socket/global routes and pending wri
   }
 });
 
+test("plugin row kinds reach the broker's upstream channel routes in place", async () => {
+  const h = await harness();
+  let traffic;
+  try {
+    browserFetch(h.base);
+    const transport = await connectBrokerTransport(h.base);
+    traffic = transport.subscribe(callbacks);
+    traffic.update(["a"]);
+    await until(() => h.requests.length === 3);
+    const channel = () => h.requests.filter((r) => r.filter["#h"]?.[0] === "a");
+    expect(channel()[0].filter.kinds).not.toContain(40006);
+    traffic.kinds([40006]);
+    await until(() => channel().length === 2);
+    expect(channel()[1].filter.kinds).toContain(40006);
+    expect(
+      h.frames.some((f) => f.kind === "CLOSE" && f.id === channel()[0].id),
+    ).toBe(true);
+    traffic.kinds([]);
+    await until(() => channel().length === 3);
+    expect(channel()[2].filter.kinds).not.toContain(40006);
+    expect(h.sockets).toHaveLength(1);
+    expect(h.requests.filter((r) => !r.filter["#h"])).toHaveLength(2);
+  } finally {
+    traffic?.dispose();
+    vi.unstubAllGlobals();
+    await h.close();
+  }
+});
+
 test.each([
   ["restricted: not a member", true, "Relay request failed (503)"],
   [

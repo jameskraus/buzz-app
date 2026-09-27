@@ -1338,3 +1338,30 @@ it("logs authentication failure and retry reasons at Info without server payload
     setLogLevel("info");
   }
 });
+it("plugin row kinds re-issue established channel routes only and reject host kinds", async () => {
+  vi.useFakeTimers();
+  const h = setup(["a"]);
+  await h.first.auth();
+  await vi.advanceTimersByTimeAsync(750);
+  const [, wire] = required(h.first.requests().find((r) => r[2]["#h"]));
+  await h.first.receive(["EOSE", wire]);
+  const before = h.first.requests().length;
+  h.owner.kinds?.([40006, 40006]);
+  expect(h.first.sent).toContainEqual(["CLOSE", wire]);
+  const reissued = h.first.requests().slice(before);
+  expect(reissued).toHaveLength(1);
+  expect(reissued[0]?.[2]).toMatchObject({
+    kinds: expect.arrayContaining([9, 40006]),
+    "#h": ["a"],
+  });
+  expect(reissued[0]?.[1]).not.toBe(wire);
+  const sent = h.first.sent.length;
+  h.owner.kinds?.([40006]);
+  expect(h.first.sent).toHaveLength(sent);
+  expect(() => h.owner.kinds?.([7])).toThrow();
+  h.owner.dispose();
+});
+function required<T>(value: T | undefined): T {
+  assert.exists(value);
+  return value;
+}

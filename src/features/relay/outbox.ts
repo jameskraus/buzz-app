@@ -5,7 +5,7 @@ import { eventDto, type EventData, type RelayEvent } from "./events";
 import type { RelayWriter } from "./transport";
 import { ByteLru, byteSize, OUTBOX_INPUT_MAX_BYTES } from "./budget";
 import { createRelayProfiler, type RelayProfiler } from "./profiling";
-import { channelRowKind } from "./kinds";
+import { CHANNEL_ROW_KINDS } from "./kinds";
 import { MessageClock } from "./message-order";
 
 export type Delivery = "sending" | "accepted" | "unknown" | "failed" | "seen";
@@ -659,7 +659,8 @@ export function createOutbox(
         );
       // Rendered messages carry send order within their second; the optimistic
       // row and the signed event share this exact ms and created_at.
-      const channelId = channelRowKind(input.kind)
+      // Core rows only: plugin kinds never change what the host writes.
+      const channelId = CHANNEL_ROW_KINDS.includes(input.kind)
         ? input.tags.find(([name]) => name === "h")?.[1]
         : undefined;
       const ms = channelId ? clock.next(channelId) : Date.now();

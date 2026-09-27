@@ -522,12 +522,14 @@ event kind into channel timelines. While the plugin is active, the kind is
 added to channel window reads and live routes, and fold turns each event into a
 `ChannelMessage` whose `plugin` field carries the kind and tags alongside the raw
 content. The host frames the row with author and time, and `component` renders
-the body. Plugin rows are never replied to, reacted to or edited, and they do not
-count toward unread, typing, notification, search or sidebar-preview evidence.
+the body. Plugin rows are never replied to, reacted to, edited, reported or
+linked, and they do not count toward unread, typing, notification, search or
+sidebar-preview evidence.
 Host-owned kinds and kinds outside 0–65535 fail activation. The host does not
 check relay support: the plugin must choose a channel-scoped (`h`-tagged) kind
-that the target relay stores, otherwise no events arrive. Channels that are
-already open pick up the kind on their next load. The optional `matches`
+that the target relay stores, otherwise no events arrive. Live routes pick up
+the kind immediately, including through the dev broker; channels that are already
+open read its history on their next load. The optional `matches`
 declines individual rows (for example an event the plugin cannot parse). The
 timeline leaves out any plugin row that no active renderer claims, including rows
 folded before the plugin unloaded, instead of showing a placeholder.

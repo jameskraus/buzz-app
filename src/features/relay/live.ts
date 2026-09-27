@@ -13,7 +13,7 @@ import {
 import type { EventTemplate, VerifiedEvent } from "nostr-tools";
 import { eventDto } from "./events.ts";
 import { EMOJI_SET } from "./emoji.ts";
-import { CHANNEL_LIVE_KINDS, pluginRowKinds } from "./kinds.ts";
+import { CHANNEL_LIVE_KINDS, pluginRowKindList } from "./kinds.ts";
 
 export const LIVE_CHANNEL_CAPACITY = 1022; // Reserve two of the relay's 1024 slots.
 export const LIVE_REPLAY_LIMIT = 500;
@@ -106,6 +106,8 @@ export type LiveSubscription = {
   identity?(): string | undefined;
   publish?(event: VerifiedEvent, signal: AbortSignal): Promise<string>;
   update(channels: readonly string[]): void;
+  /** Plugin row kinds added to every channel route; a change re-issues open channel routes. */
+  kinds?(kinds: readonly number[]): void;
   /** Host demand only: reorder existing pending routes, never grant new interests. */
   prioritize?(channels: readonly string[]): void;
   observe?(generation: number | null): void;
@@ -144,7 +146,6 @@ type Route = {
   quotaRetries: number;
   deadline?: ReturnType<typeof setTimeout>;
 };
-const channelKinds = () => [...CHANNEL_LIVE_KINDS, ...pluginRowKinds()];
 /** One authenticated socket, independently established channel routes and two explicit globals.
  * Recent replay is opportunistic: finite reads own catch-up and history bounds. */
 export function subscribeRelayTraffic(
@@ -170,6 +171,7 @@ export function subscribeRelayTraffic(
   let connection: LiveSnapshot["status"] = "connecting";
   let connectionError: string | undefined;
   let interests: string[] = [];
+  let rowKinds: number[] = [];
   let priority: string[] = [];
   let observer: number | null = null;
   let presenceReceipt:
@@ -353,7 +355,10 @@ export function subscribeRelayTraffic(
       active++;
       if (route.id === "observer") route.since = Math.floor(Date.now() / 1000);
       const scope = route.channelId
-        ? { kinds: channelKinds(), "#h": [route.channelId] }
+        ? {
+            kinds: [...CHANNEL_LIVE_KINDS, ...rowKinds],
+            "#h": [route.channelId],
+          }
         : route.id === "profiles"
           ? { kinds: [0, 10100, 30177] }
           : route.id === "observer"
@@ -700,6 +705,22 @@ export function subscribeRelayTraffic(
       if (closed || JSON.stringify(next) === JSON.stringify(interests)) return;
       interests = next;
       sync();
+    },
+    kinds(input) {
+      const next = pluginRowKindList(input);
+      if (closed || JSON.stringify(next) === JSON.stringify(rowKinds)) return;
+      rowKinds = next;
+      // Unsent routes read rowKinds at dispatch; re-issue the ones already on the wire.
+      for (const route of routes.values())
+        if (route.channelId && route.wire) {
+          clearTimeout(route.deadline);
+          wires.delete(route.wire);
+          send(["CLOSE", route.wire]);
+          delete route.wire;
+          route.status = "pending";
+        }
+      pump();
+      notify();
     },
     retry() {
       if (closed) return;

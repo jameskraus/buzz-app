@@ -243,3 +243,19 @@ it("membership activity cannot abort acknowledgment of a visible message below i
     "conversation",
   ]);
 });
+
+it("plugin rows cannot abort acknowledgment of a visible message below them", () => {
+  const h = setup();
+  h.setRows([
+    {
+      ...row("plugin", 10, 50),
+      dataset: { messageId: "plugin", pluginRow: "" },
+    } as ReturnType<typeof row>,
+    row("conversation", 100, 200),
+  ]);
+  h.mutation();
+  vi.advanceTimersByTime(750);
+  expect(h.leases.at(-1)?.observe).toHaveBeenCalledExactlyOnceWith([
+    "conversation",
+  ]);
+});

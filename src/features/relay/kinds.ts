@@ -41,26 +41,44 @@ const RESERVED_KINDS = new Set([...CHANNEL_LIVE_KINDS, 39001, 39006]);
 /** Plugin-registered row kinds, reference counted by registration. Rows only:
  * never unread, typing, notification or search evidence. */
 const pluginKinds = new Map<number, number>();
+const kindListeners = new Set<() => void>();
+const pluginKind = (kind: unknown): kind is number =>
+  Number.isInteger(kind) &&
+  (kind as number) >= 0 &&
+  (kind as number) <= 65535 &&
+  !RESERVED_KINDS.has(kind as number);
 
 /** Adds a kind to channel windows and live routes until the returned release runs.
- * Channels already open pick it up on their next load. */
+ * Live routes switch immediately; channels already open read its history on their next load. */
 export function registerPluginRowKind(kind: number): () => void {
-  if (
-    !Number.isInteger(kind) ||
-    kind < 0 ||
-    kind > 65535 ||
-    RESERVED_KINDS.has(kind)
-  )
+  if (!pluginKind(kind))
     throw new Error(`Kind ${kind} cannot be a plugin timeline kind`);
-  pluginKinds.set(kind, (pluginKinds.get(kind) ?? 0) + 1);
+  const count = pluginKinds.get(kind) ?? 0;
+  pluginKinds.set(kind, count + 1);
+  if (!count) for (const listener of kindListeners) listener();
   return () => {
     const count = (pluginKinds.get(kind) ?? 1) - 1;
     if (count) pluginKinds.set(kind, count);
-    else pluginKinds.delete(kind);
+    else {
+      pluginKinds.delete(kind);
+      for (const listener of kindListeners) listener();
+    }
   };
 }
 export const pluginRowKind = (kind: number) => pluginKinds.has(kind);
-export const pluginRowKinds = () => [...pluginKinds.keys()];
+export const pluginRowKinds = () =>
+  [...pluginKinds.keys()].sort((a, b) => a - b);
+/** Calls `listener` whenever the registered kind set changes. */
+export function onPluginRowKinds(listener: () => void) {
+  kindListeners.add(listener);
+  return () => void kindListeners.delete(listener);
+}
+/** Validates a plugin kind list crossing a process boundary (the live broker). */
+export function pluginRowKindList(input: unknown): number[] {
+  if (!Array.isArray(input) || input.length > 256 || !input.every(pluginKind))
+    throw new Error("Invalid plugin timeline kinds");
+  return [...new Set(input)].sort((a, b) => a - b);
+}
 
 /** Core row kinds plus every registered plugin kind, for reads and live routes. */
 export const channelRowKinds = () => [

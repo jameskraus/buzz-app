@@ -432,3 +432,34 @@ it("in-place channel interests preserve an outstanding presence publication", as
     owner.dispose();
   }
 });
+it("carries plugin row kinds as in-place interest revisions", async () => {
+  const f = fixture();
+  const t = await connectBrokerTransport();
+  const owner = required(t.subscribe)(f.callbacks);
+  const body = (suffix: string) =>
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(([url]) => String(url).endsWith(suffix))
+      .map(([, init]) => JSON.parse(String(init?.body)));
+  try {
+    owner.update(["a"]);
+    owner.kinds?.([40006]);
+    f.accept(0);
+    await tick();
+    expect(body("/stream-interests")[0]).toMatchObject({
+      channels: ["a"],
+      kinds: [40006],
+    });
+    required(f.interests[0]).resolve(new Response(null, { status: 200 }));
+    await tick();
+    owner.kinds?.([]);
+    await tick();
+    expect(body("/stream-interests").at(-1)).toMatchObject({
+      channels: ["a"],
+      kinds: [],
+    });
+    expect(() => owner.kinds?.([9])).toThrow();
+  } finally {
+    owner.dispose();
+  }
+});
