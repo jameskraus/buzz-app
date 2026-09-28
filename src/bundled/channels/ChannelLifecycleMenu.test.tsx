@@ -315,7 +315,7 @@ it.each(["leave", "hide", "archive"] as const)(
     if (action === "archive") {
       expect(
         screen.getByText(
-          "Archive this channel for everyone and remove it from the sidebar. Messages are kept. You can unarchive it later.",
+          "Archive this channel for everyone and remove it from the sidebar. Messages are kept. A channel administrator can unarchive it later using another supported client; this app cannot restore it yet.",
         ),
       ).toBeDefined();
     }

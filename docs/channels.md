@@ -333,7 +333,8 @@ owner, so confirmed removal can unmount Settings without cancelling completion.
 Cancellation returns focus to the originating Settings button (or the sidebar
 fallback if that entry has gone away). Archive retains messages and membership;
 restore requires another supported client until archived browsing/restore lands.
-Archive confirmation explains that you can unarchive later. Archive and Leave
+Archive confirmation explains that a channel administrator can unarchive later
+using another supported client, and that this app cannot restore it yet. Archive and Leave
 use the default button style in both Settings and their confirmation dialogs;
 Delete uses the red destructive button style.
 Delete keeps the named-channel warning and destructive confirmation button without
