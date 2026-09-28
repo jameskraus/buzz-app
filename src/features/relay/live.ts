@@ -710,14 +710,20 @@ export function subscribeRelayTraffic(
       const next = pluginRowKindList(input);
       if (closed || JSON.stringify(next) === JSON.stringify(rowKinds)) return;
       rowKinds = next;
-      // Unsent routes read rowKinds at dispatch; re-issue the ones already on the wire.
+      // Unsent routes read rowKinds at dispatch; re-issue the ones already on the wire as fresh routes.
       for (const route of routes.values())
         if (route.channelId && route.wire) {
           clearTimeout(route.deadline);
           wires.delete(route.wire);
           send(["CLOSE", route.wire]);
           delete route.wire;
-          route.status = "pending";
+          Object.assign(route, {
+            status: "pending",
+            replay: "unknown",
+            count: 0,
+            quotaRetries: 0,
+            since: Math.floor(Date.now() / 1000) - 300,
+          });
         }
       pump();
       notify();

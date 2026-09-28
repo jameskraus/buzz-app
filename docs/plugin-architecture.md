@@ -525,9 +525,10 @@ content. The host frames the row with author and time, and `component` renders
 the body. Plugin rows are never replied to, reacted to, edited, reported or
 linked, and they do not count toward unread, typing, notification, search or
 sidebar-preview evidence.
-Host-owned kinds and kinds outside 0–65535 fail activation. The host does not
-check relay support: the plugin must choose a channel-scoped (`h`-tagged) kind
-that the target relay stores, otherwise no events arrive. Live routes pick up
+Kinds the host already reads or routes for channels, and kinds outside 0–65535,
+fail activation. The host does not check relay support: the plugin must choose a
+channel-scoped (`h`-tagged) kind that the target relay stores, otherwise no
+events arrive. Live routes pick up
 the kind immediately, including through the dev broker; channels that are already
 open read its history on their next load. The optional `matches`
 declines individual rows (for example an event the plugin cannot parse). The

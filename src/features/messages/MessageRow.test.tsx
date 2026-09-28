@@ -6,6 +6,7 @@ import {
   fireEvent,
   render as renderDom,
   screen,
+  within,
 } from "@testing-library/react";
 import { messageCopyText } from "./message-copy";
 import { profileTarget } from "../profiles/target";
@@ -869,3 +870,50 @@ it.each([
     cleanup();
   },
 );
+
+it("marks plugin rows ineligible for reading and withholds report and copy link", async () => {
+  const channels = { channels: [], status: "ready" };
+  const session = {
+    messages: { report: vi.fn() },
+    channels: {
+      subscribeList: () => () => {},
+      list: () => channels,
+    },
+  } as unknown as RelaySession;
+  const show = (value: ChannelMessage) =>
+    renderDom(
+      <MessageRow
+        row={value}
+        session={session}
+        scope={`https://relay.test/${"a".repeat(64)}`}
+        profile={undefined}
+        media={() => undefined}
+        onOpenLink={() => false}
+        day={false}
+        retry={undefined}
+      />,
+    );
+  const ordinary = {
+    ...row,
+    id: "b".repeat(64),
+    channelId: "11111111-1111-4111-8111-111111111111",
+  };
+  for (const plugin of [false, true]) {
+    const { container } = show(
+      plugin ? { ...ordinary, plugin: { kind: 40006, tags: [] } } : ordinary,
+    );
+    const element = container.querySelector("[data-message-id]");
+    expect(element?.hasAttribute("data-plugin-row")).toBe(plugin);
+    const copyLinks = screen.getAllByRole("button", { name: "Copy link" });
+    for (const button of copyLinks)
+      expect((button as HTMLButtonElement).disabled).toBe(plugin);
+    fireEvent.click(
+      screen.getByRole("button", { name: "More message actions" }),
+    );
+    const menu = await screen.findByRole("menu");
+    expect(
+      within(menu).queryByRole("menuitem", { name: "Report message" }) !== null,
+    ).toBe(!plugin);
+    cleanup();
+  }
+});

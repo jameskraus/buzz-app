@@ -1338,14 +1338,21 @@ it("logs authentication failure and retry reasons at Info without server payload
     setLogLevel("info");
   }
 });
-it("plugin row kinds re-issue established channel routes only and reject host kinds", async () => {
+it("plugin row kinds re-issue established channel routes as fresh routes and reject host kinds", async () => {
   vi.useFakeTimers();
   const h = setup(["a"]);
   await h.first.auth();
   await vi.advanceTimersByTimeAsync(750);
   const [, wire] = required(h.first.requests().find((r) => r[2]["#h"]));
+  const event = message(h.key, "a", "echo", 1);
+  for (let i = 0; i < 500; i++) await h.first.receive(["EVENT", wire, event]);
   await h.first.receive(["EOSE", wire]);
+  const replay = () =>
+    h.callbacks.state.mock.lastCall?.[0].routes.find((r) => r.channelId === "a")
+      ?.replay;
+  expect(replay()).toBe("limited");
   const before = h.first.requests().length;
+  vi.setSystemTime(Date.now() + 3_600_000);
   h.owner.kinds?.([40006, 40006]);
   expect(h.first.sent).toContainEqual(["CLOSE", wire]);
   const reissued = h.first.requests().slice(before);
@@ -1353,8 +1360,11 @@ it("plugin row kinds re-issue established channel routes only and reject host ki
   expect(reissued[0]?.[2]).toMatchObject({
     kinds: expect.arrayContaining([9, 40006]),
     "#h": ["a"],
+    since: Math.floor(Date.now() / 1000) - 300,
   });
   expect(reissued[0]?.[1]).not.toBe(wire);
+  await h.first.receive(["EOSE", required(reissued[0])[1]]);
+  expect(replay()).toBe("unknown");
   const sent = h.first.sent.length;
   h.owner.kinds?.([40006]);
   expect(h.first.sent).toHaveLength(sent);
