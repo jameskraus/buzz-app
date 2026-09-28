@@ -50,6 +50,8 @@ for (const action of ["archive", "delete"]) {
       const panel = panelFor(page);
       const trigger = panel.getByRole("button", { name: label, exact: true });
       await expect(trigger).toBeVisible();
+      const variant = action === "delete" ? "destructive" : "subtle";
+      await expect(trigger).toHaveAttribute("data-variant", variant);
       await expect(
         panel.getByRole("button", { name: "Leave channel", exact: true }),
       ).toHaveCount(0);
@@ -63,6 +65,9 @@ for (const action of ["archive", "delete"]) {
         exact: true,
       });
       await expect(dialog).toBeVisible();
+      await expect(
+        dialog.getByRole("button", { name: label, exact: true }),
+      ).toHaveAttribute("data-variant", variant);
       await dialog.screenshot({
         path: testInfo.outputPath(`${action}-confirmation.png`),
       });
@@ -96,15 +101,8 @@ for (const action of ["archive", "delete"]) {
           name: label,
           exact: true,
         });
-        if (action === "delete") {
-          await expect(confirm).toBeDisabled();
-          const name = dialog.getByRole("textbox", {
-            name: "Channel name confirmation",
-          });
-          await name.fill("lifecycle channel");
-          await expect(confirm).toBeDisabled();
-          await name.fill("Lifecycle channel");
-        }
+        await expect(confirm).toBeEnabled();
+        await expect(dialog.getByRole("textbox")).toHaveCount(0);
         await confirm.click();
         await seen;
         await expect(confirm).toBeDisabled();
@@ -147,3 +145,83 @@ for (const action of ["archive", "delete"]) {
     });
   });
 }
+
+// Real broker/profile verification -> both entry points -> shared dialog and
+// confirmed navigation is the browser boundary; the authority matrix is in Vitest.
+test.describe("owned-agent Delete", () => {
+  test.use({ lifecycleRole: "admin", lifecycleOwnerAgent: true });
+  test("offers Delete in both surfaces and confirms through the shared owner", async ({
+    page,
+    app,
+  }) => {
+    await page.goto(app.origin);
+    await openPage(page, "Messages");
+    const sidebar = page.getByRole("navigation", {
+      name: "Subscribed channels",
+    });
+    const row = sidebar.getByRole("button", {
+      name: "Lifecycle channel",
+      exact: true,
+    });
+    await row.click();
+    await expect(
+      page.getByRole("textbox", {
+        name: "Message #Lifecycle channel",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await row.focus();
+    await page.keyboard.press("Shift+F10");
+    const menu = page.getByRole("menu", {
+      name: "Actions for Lifecycle channel",
+    });
+    await menu
+      .getByRole("menuitem", { name: "Delete channel", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", {
+      name: "Delete channel: Lifecycle channel",
+      exact: true,
+    });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(row).toBeFocused();
+    expect(app.report.lifecyclePublications ?? []).toHaveLength(0);
+    await page
+      .getByRole("button", { name: "Channel settings", exact: true })
+      .click();
+    const panel = panelFor(page);
+    const trigger = panel.getByRole("button", {
+      name: "Delete channel",
+      exact: true,
+    });
+    await expect(trigger).toBeVisible();
+    await expect(
+      panel.getByRole("button", { name: "Leave channel", exact: true }),
+    ).toBeVisible();
+    await trigger.click();
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(trigger).toBeFocused();
+    expect(app.report.lifecyclePublications ?? []).toHaveLength(0);
+    await trigger.click();
+    await dialog
+      .getByRole("button", { name: "Delete channel", exact: true })
+      .click();
+    await expect(dialog).toHaveCount(0);
+    await expect(panel).toHaveCount(0);
+    await expect(row).toHaveCount(0);
+    await expect(
+      page.getByRole("textbox", { name: "Message #Alpha", exact: true }),
+    ).toBeVisible();
+    await page.reload();
+    await expect(
+      sidebar.getByRole("button", { name: "Lifecycle channel", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("textbox", { name: "Message #Alpha", exact: true }),
+    ).toBeVisible();
+    expect(app.report.lifecyclePublications.map((event) => event.kind)).toEqual(
+      [9008],
+    );
+    expect(app.report.unexpected).toEqual([]);
+  });
+});

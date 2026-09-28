@@ -61,10 +61,7 @@ export function ChannelLifecycleActions({
   return (
     <>
       {state.permissions?.canLeave && (
-        <Button
-          variant="destructive"
-          onClick={(event) => choose("leave", event.currentTarget)}
-        >
+        <Button onClick={(event) => choose("leave", event.currentTarget)}>
           <SignOutIcon size={16} aria-hidden="true" />
           Leave channel
         </Button>

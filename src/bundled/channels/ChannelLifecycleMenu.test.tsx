@@ -253,11 +253,17 @@ it("confirmation, pending lockout and failed-write recovery stay in the actual d
     name: "Delete channel",
   }) as HTMLButtonElement;
   expect(confirm.getAttribute("data-variant")).toBe("destructive");
-  expect(confirm.disabled).toBe(true);
-  await user.type(
-    screen.getByRole("textbox", { name: "Channel name confirmation" }),
-    "Fixture",
-  );
+  expect(confirm.disabled).toBe(false);
+  expect(screen.queryByRole("textbox")).toBeNull();
+  expect(
+    screen.getByRole("dialog", { name: "Delete channel: Fixture" }),
+  ).toBeDefined();
+  expect(
+    screen.getByText(
+      "Delete this channel for everyone. You cannot undo this action from Buzz.",
+    ),
+  ).toBeDefined();
+  expect(lifecycle.run).not.toHaveBeenCalled();
   await user.click(confirm);
   await waitFor(() => expect(lifecycle.run).toHaveBeenCalledOnce());
   expect(confirm.disabled).toBe(true);
@@ -304,7 +310,7 @@ it.each(["leave", "hide", "archive"] as const)(
     }[action];
     const confirm = screen.getByRole("button", { name: label });
     expect(confirm.getAttribute("data-variant")).toBe(
-      action === "archive" ? "subtle" : "destructive",
+      action === "hide" ? "destructive" : "subtle",
     );
     if (action === "archive") {
       expect(

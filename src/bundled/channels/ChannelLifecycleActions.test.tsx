@@ -217,6 +217,10 @@ it.each([
       const button = screen.queryByRole("button", { name: label });
       if (permitted) {
         expect(button).toBeEnabled();
+        expect(button).toHaveAttribute(
+          "data-variant",
+          action === "delete" ? "destructive" : "subtle",
+        );
         await user.click(screen.getByRole("button", { name: label }));
         expect(choose).toHaveBeenLastCalledWith(action, button);
       } else expect(button).toBeNull();

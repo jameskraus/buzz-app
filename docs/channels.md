@@ -296,11 +296,20 @@ change shared-menu styling.
 The row menu resolves fresh relay-authored metadata (`39000`), administrators
 (`39001`) and membership (`39002`) at exact channel coordinates before offering
 Archive/Delete/Leave or DM Hide. Archive requires a direct owner/admin role;
-Delete requires a direct owner role; the last owner cannot Leave. The menu omits
+Delete requires a direct owner role or verified ownership of an active owner-role
+agent; the last owner cannot Leave. The menu omits
 Leave when it is forbidden, without an ownership-transfer explanation. Action
-labels have no trailing ellipsis; confirmation dialogs are unchanged. DMs offer Hide
-only. Delegated owner-agent authority and community-admin overrides are not
-inferred or supported by this slice; the relay remains the final authority.
+labels have no trailing ellipsis. DMs offer Hide
+only. For the owner-agent Delete path, the shared lifecycle capability reads fresh
+kind-0 profiles for the validated owner-role members in batches of at most four
+exact-author filters. It verifies the single target-bound NIP-OA ownership tag's
+signature, never cached/display `ownerPubkey`. The newest returned profile controls
+eligibility; missing, malformed or foreign attestations grant nothing, and failed
+reads remain unavailable/retry rather than silently granting permission. This is
+ownership evidence, not delegation to sign as the agent: the viewer signs the
+unchanged Delete command, and the relay checks its current ownership state.
+Existing viewer-membership requirements remain; nonmember owner-agent access,
+owner-agent Archive authority and community-admin overrides are not added.
 Membership accepts NIP-29 `p` tags with optional relay and role fields
 (`["p", pubkey, relay_hint?, role?]`), including the relay's four-field roster.
 These fields never substitute for the separate administrator record. Invalid
@@ -313,7 +322,8 @@ omitted when there are no lifecycle items. Actions appear only after verificatio
 Channel Settings also offers **Leave channel**, **Archive channel** and **Delete
 channel** in its tools area, using one fresh lifecycle permission check. Each
 entry follows its own permission result: a last owner can Archive/Delete even
-though Leave is forbidden, while an admin can Archive but not Delete. Forbidden
+though Leave is forbidden, while an ordinary admin can Archive but not Delete.
+An admin/member who verifiably owns an owner-role agent can also Delete. Forbidden
 entries are omitted; failed checks offer retry and unsupported connections explain
 unavailability. DMs, sessions and read-only nonmember/cached views have no channel
 lifecycle entries. Archive status is not a blanket exclusion: an accessible
@@ -323,18 +333,21 @@ owner, so confirmed removal can unmount Settings without cancelling completion.
 Cancellation returns focus to the originating Settings button (or the sidebar
 fallback if that entry has gone away). Archive retains messages and membership;
 restore requires another supported client until archived browsing/restore lands.
-Archive confirmation explains that you can unarchive later and uses the same
-non-destructive button style as its Settings entry.
-Delete retains its exact-channel-name confirmation. Metadata and member-role
-editing remain separate.
+Archive confirmation explains that you can unarchive later. Archive and Leave
+use the default button style in both Settings and their confirmation dialogs;
+Delete uses the red destructive button style.
+Delete keeps the named-channel warning and destructive confirmation button without
+requiring the channel name to be typed. Metadata and member-role editing remain
+separate.
 
-Each command has explicit confirmation; Delete additionally requires the channel
-name. The lifecycle owner rechecks authority before signing and again before
-publication, validates the returned command, and confirms relay-owned state before
-removing a row. Archive retains membership; confirmed Delete/Leave use the existing
-access-loss purge. Commands use narrow development-broker routes, never the message
-outbox or automatic replay. Hosts without this capability display an unavailable
-notice; native/direct-signer parity is deferred.
+Each command has explicit confirmation. The lifecycle owner rechecks authority
+before signing and again before publication (including fresh owner-agent evidence
+for Delete), validates the returned command, and
+confirms relay-owned state before removing a row. Archive retains membership;
+confirmed Delete/Leave use the existing access-loss purge. Commands use narrow
+development-broker routes, never the message outbox or automatic replay. Hosts
+without this capability display an unavailable notice; native/direct-signer parity
+is deferred.
 
 Main’s DM × remains local removal, including restoration on new message evidence.
 The separate, confirmed Hide conversation action publishes `41012`, not Leave or Delete. The separate relay-authored `30622`

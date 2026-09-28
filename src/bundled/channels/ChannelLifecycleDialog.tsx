@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../../shared/design-system/ui/Button";
-import { Input } from "../../shared/design-system/ui/Input";
 import {
   ChannelLifecycleUnconfirmed,
   type ChannelLifecycleCapability,
@@ -50,7 +49,6 @@ export function ChannelLifecycleDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [refreshRequired, setRefreshRequired] = useState(false);
-  const [confirmation, setConfirmation] = useState("");
   const operation = useRef<AbortController | undefined>(undefined);
   useEffect(() => {
     dialog.current?.showModal();
@@ -59,12 +57,7 @@ export function ChannelLifecycleDialog({
     };
   }, []);
   const submit = async () => {
-    if (
-      operation.current ||
-      refreshRequired ||
-      (action === "delete" && confirmation !== channelName)
-    )
-      return;
+    if (operation.current || refreshRequired) return;
     const controller = new AbortController();
     operation.current = controller;
     setBusy(true);
@@ -102,19 +95,6 @@ export function ChannelLifecycleDialog({
         {copy[action].title}: {channelName}
       </h2>
       <p id="channel-lifecycle-description">{copy[action].detail}</p>
-      {action === "delete" && (
-        <label htmlFor="channel-lifecycle-confirmation">
-          Type {channelName} to confirm
-          <Input
-            id="channel-lifecycle-confirmation"
-            aria-label="Channel name confirmation"
-            value={confirmation}
-            disabled={busy}
-            onChange={(event) => setConfirmation(event.target.value)}
-            autoComplete="off"
-          />
-        </label>
-      )}
       {error && <p role="alert">{error}</p>}
       {busy && (
         <p role="status">
@@ -127,12 +107,12 @@ export function ChannelLifecycleDialog({
         </Button>
         <Button
           type="button"
-          variant={action === "archive" ? "subtle" : "destructive"}
-          disabled={
-            busy ||
-            refreshRequired ||
-            (action === "delete" && confirmation !== channelName)
+          variant={
+            action === "archive" || action === "leave"
+              ? "subtle"
+              : "destructive"
           }
+          disabled={busy || refreshRequired}
           onClick={() => void submit()}
         >
           {copy[action].title}

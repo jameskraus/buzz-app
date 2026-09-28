@@ -1,4 +1,5 @@
 import { getEventHash } from "nostr-tools";
+import { authTagOwner } from "../agents/owner-attestation";
 import type { RelayReader } from "./reader";
 import type { RelayWriter } from "./transport";
 import { PublishRejected } from "./outbox";
@@ -125,11 +126,51 @@ export function createChannelLifecycle({
       throw new Error("Unexpected channel state response");
     return events;
   }
-  async function load(id: string, signal: AbortSignal) {
+  async function load(id: string, signal: AbortSignal, checkOwnedAgent = true) {
     assertAccess(id);
     const events = await read([39000, 39001, 39002], id, signal);
     assertAccess(id);
-    return lifecycleSettings(events, id, viewer, relayAuthor);
+    const settings = lifecycleSettings(events, id, viewer, relayAuthor);
+    if (!reader || !checkOwnedAgent || settings.canDelete || settings.canHide)
+      return settings;
+    // lifecycleSettings validated the entire owner roster against membership.
+    const owners =
+      lifecycleRecord(events, 39001, id, relayAuthor)?.tags.flatMap(
+        ([name, pubkey, role]) =>
+          name === "p" && role === "owner" && pubkey ? [pubkey] : [],
+      ) ?? [];
+    for (let start = 0; start < owners.length; start += 4) {
+      const batch = owners.slice(start, start + 4);
+      const profiles = await reader.read(
+        batch.map((pubkey) => ({ kinds: [0], authors: [pubkey], limit: 1 })),
+        { signal, fresh: true, priority: "foreground" },
+      );
+      signal.throwIfAborted();
+      assertAccess(id);
+      if (
+        profiles.some(
+          (event) => event.kind !== 0 || !batch.includes(event.pubkey),
+        )
+      )
+        throw new Error("Unexpected channel owner profile response");
+      for (const pubkey of batch) {
+        const profile = profiles
+          .filter((event) => event.pubkey === pubkey)
+          .reduce<RelayEvent | undefined>(newer, undefined);
+        const [auth, ...extra] =
+          profile?.tags.filter(([name]) => name === "auth") ?? [];
+        // Verify target-bound ownership, never the profile's display owner field.
+        // This is ownership evidence, not delegation to sign the Delete command.
+        const owns =
+          auth &&
+          !extra.length &&
+          (await authTagOwner(pubkey, auth)) === viewer;
+        signal.throwIfAborted();
+        assertAccess(id);
+        if (owns) return Object.freeze({ ...settings, canDelete: true });
+      }
+    }
+    return settings;
   }
   async function readVisibility(signal: AbortSignal) {
     const events = await read([DM_VISIBILITY_KIND], viewer, signal, true);
@@ -206,7 +247,7 @@ export function createChannelLifecycle({
       try {
         await owned(async (signal) => {
           const authorize = async () => {
-            const settings = await load(id, signal);
+            const settings = await load(id, signal, action === "delete");
             const permitted = {
               archive: settings.canArchive,
               delete: settings.canDelete,
