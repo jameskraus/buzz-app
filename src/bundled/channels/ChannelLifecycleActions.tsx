@@ -1,22 +1,30 @@
 import { useEffect, useState } from "react";
 import type { ChannelLifecycleCapability } from "../../features/relay/channel-lifecycle";
+import type {
+  ChannelLifecycleAction,
+  ChannelLifecycleSettings,
+} from "../../features/relay/channel-lifecycle-protocol";
 import { Button } from "../../shared/design-system/ui/Button";
-import { SignOutIcon } from "../../shared/design-system/icons";
+import {
+  ArchiveIcon,
+  SignOutIcon,
+  TrashIcon,
+} from "../../shared/design-system/icons";
 
 /** Settings reads permissions only while open; the sidebar owns confirmation. */
-export function ChannelLeaveButton({
+export function ChannelLifecycleActions({
   channelId,
   lifecycle,
   choose,
 }: {
   channelId: string;
   lifecycle: ChannelLifecycleCapability;
-  choose(trigger: HTMLElement): void;
+  choose(action: ChannelLifecycleAction, trigger: HTMLElement): void;
 }) {
   const [state, setState] = useState<{
     channelId: string;
     lifecycle: ChannelLifecycleCapability;
-    canLeave?: boolean;
+    permissions?: ChannelLifecycleSettings;
     failed?: boolean;
   }>();
   const [retry, setRetry] = useState(0);
@@ -26,9 +34,9 @@ export function ChannelLeaveButton({
     const controller = new AbortController();
     setState(undefined);
     void lifecycle.load(channelId, controller.signal).then(
-      ({ canLeave }) => {
+      (permissions) => {
         if (!controller.signal.aborted)
-          setState({ channelId, lifecycle, canLeave });
+          setState({ channelId, lifecycle, permissions });
       },
       () => {
         if (!controller.signal.aborted)
@@ -50,14 +58,32 @@ export function ChannelLeaveButton({
         </Button>
       </div>
     );
-  if (!state.canLeave) return null;
   return (
-    <Button
-      variant="destructive"
-      onClick={(event) => choose(event.currentTarget)}
-    >
-      <SignOutIcon size={16} aria-hidden="true" />
-      Leave channel
-    </Button>
+    <>
+      {state.permissions?.canLeave && (
+        <Button
+          variant="destructive"
+          onClick={(event) => choose("leave", event.currentTarget)}
+        >
+          <SignOutIcon size={16} aria-hidden="true" />
+          Leave channel
+        </Button>
+      )}
+      {state.permissions?.canArchive && (
+        <Button onClick={(event) => choose("archive", event.currentTarget)}>
+          <ArchiveIcon size={16} aria-hidden="true" />
+          Archive channel
+        </Button>
+      )}
+      {state.permissions?.canDelete && (
+        <Button
+          variant="destructive"
+          onClick={(event) => choose("delete", event.currentTarget)}
+        >
+          <TrashIcon size={16} aria-hidden="true" />
+          Delete channel
+        </Button>
+      )}
+    </>
   );
 }

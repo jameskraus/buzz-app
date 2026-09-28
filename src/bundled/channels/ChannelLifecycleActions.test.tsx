@@ -5,11 +5,11 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import type { ChannelLifecycleCapability } from "../../features/relay/channel-lifecycle";
 import type { ChannelLifecycleSettings } from "../../features/relay/channel-lifecycle-protocol";
-import { ChannelLeaveButton } from "./ChannelLeaveButton";
+import { ChannelLifecycleActions } from "./ChannelLifecycleActions";
 
 afterEach(cleanup);
 const settings: ChannelLifecycleSettings = {
-  channelId: "alpha",
+  channelId: "11111111-1111-4111-8111-111111111111",
   channelType: "stream",
   canLeave: true,
   canArchive: false,
@@ -39,8 +39,8 @@ it("waits for fresh permission then hands the trigger to the existing confirmati
   lifecycle.load.mockReturnValueOnce(gate.promise);
   const choose = vi.fn();
   render(
-    <ChannelLeaveButton
-      channelId="alpha"
+    <ChannelLifecycleActions
+      channelId="11111111-1111-4111-8111-111111111111"
       lifecycle={lifecycle}
       choose={choose}
     />,
@@ -54,7 +54,7 @@ it("waits for fresh permission then hands the trigger to the existing confirmati
   const user = userEvent.setup();
   button.focus();
   await user.keyboard("{Enter}");
-  expect(choose).toHaveBeenCalledWith(button);
+  expect(choose).toHaveBeenCalledWith("leave", button);
   expect(lifecycle.run).not.toHaveBeenCalled();
 });
 it("omits forbidden Leave rather than an ownership-transfer explanation", async () => {
@@ -65,8 +65,8 @@ it("omits forbidden Leave rather than an ownership-transfer explanation", async 
     leaveReason: "Transfer ownership before leaving the channel.",
   });
   const mounted = render(
-    <ChannelLeaveButton
-      channelId="alpha"
+    <ChannelLifecycleActions
+      channelId="11111111-1111-4111-8111-111111111111"
       lifecycle={lifecycle}
       choose={vi.fn()}
     />,
@@ -78,8 +78,8 @@ it("keeps unavailable permission checks distinct from forbidden and offers expli
   const lifecycle = capability();
   lifecycle.load.mockRejectedValueOnce(new Error("Malformed state"));
   render(
-    <ChannelLeaveButton
-      channelId="alpha"
+    <ChannelLifecycleActions
+      channelId="11111111-1111-4111-8111-111111111111"
       lifecycle={lifecycle}
       choose={vi.fn()}
     />,
@@ -102,8 +102,8 @@ it("keeps unavailable permission checks distinct from forbidden and offers expli
 it("explains an unsupported host without starting a lookup or write", () => {
   const lifecycle = { ...capability(), available: false };
   render(
-    <ChannelLeaveButton
-      channelId="alpha"
+    <ChannelLifecycleActions
+      channelId="11111111-1111-4111-8111-111111111111"
       lifecycle={lifecycle}
       choose={vi.fn()}
     />,
@@ -123,31 +123,38 @@ it("fences permissions from a replaced channel, capability, or unmounted pane", 
     .mockReturnValueOnce(next.promise);
   const choose = vi.fn();
   const mounted = render(
-    <ChannelLeaveButton
-      channelId="alpha"
+    <ChannelLifecycleActions
+      channelId="11111111-1111-4111-8111-111111111111"
       lifecycle={lifecycle}
       choose={choose}
     />,
   );
   const signal = lifecycle.load.mock.calls[0]?.[1];
   mounted.rerender(
-    <ChannelLeaveButton
-      channelId="beta"
+    <ChannelLifecycleActions
+      channelId="22222222-2222-4222-8222-222222222222"
       lifecycle={lifecycle}
       choose={choose}
     />,
   );
   expect(signal?.aborted).toBe(true);
-  await act(async () => old.resolve(settings));
+  await act(async () =>
+    old.resolve({ ...settings, canArchive: true, canDelete: true }),
+  );
   expect(screen.queryByRole("button")).toBeNull();
-  await act(async () => next.resolve({ ...settings, channelId: "beta" }));
+  await act(async () =>
+    next.resolve({
+      ...settings,
+      channelId: "22222222-2222-4222-8222-222222222222",
+    }),
+  );
   expect(screen.getByRole("button", { name: "Leave channel" })).toBeEnabled();
   const replacement = capability();
   const held = deferred<ChannelLifecycleSettings>();
   replacement.load.mockReturnValueOnce(held.promise);
   mounted.rerender(
-    <ChannelLeaveButton
-      channelId="beta"
+    <ChannelLifecycleActions
+      channelId="22222222-2222-4222-8222-222222222222"
       lifecycle={replacement}
       choose={choose}
     />,
@@ -158,4 +165,107 @@ it("fences permissions from a replaced channel, capability, or unmounted pane", 
   expect(pending?.aborted).toBe(true);
   await act(async () => held.resolve(settings));
   expect(choose).not.toHaveBeenCalled();
+});
+
+it.each([
+  { role: "last owner", canLeave: false, canArchive: true, canDelete: true },
+  {
+    role: "owner with another owner",
+    canLeave: true,
+    canArchive: true,
+    canDelete: true,
+  },
+  { role: "admin", canLeave: true, canArchive: true, canDelete: false },
+  { role: "member", canLeave: true, canArchive: false, canDelete: false },
+  {
+    role: "archived owner",
+    canLeave: false,
+    canArchive: false,
+    canDelete: true,
+  },
+  {
+    role: "no permitted actions",
+    canLeave: false,
+    canArchive: false,
+    canDelete: false,
+  },
+])(
+  "uses independent action permissions from one read: $role",
+  async ({ canLeave, canArchive, canDelete }) => {
+    const lifecycle = capability();
+    const gate = deferred<ChannelLifecycleSettings>();
+    lifecycle.load.mockReturnValueOnce(gate.promise);
+    const choose = vi.fn();
+    render(
+      <ChannelLifecycleActions
+        channelId={settings.channelId}
+        lifecycle={lifecycle}
+        choose={choose}
+      />,
+    );
+    await waitFor(() => expect(lifecycle.load).toHaveBeenCalledOnce());
+    expect(screen.queryByRole("button")).toBeNull();
+    await act(async () =>
+      gate.resolve({ ...settings, canLeave, canArchive, canDelete }),
+    );
+    const user = userEvent.setup();
+    for (const [action, label, permitted] of [
+      ["leave", "Leave channel", canLeave],
+      ["archive", "Archive channel", canArchive],
+      ["delete", "Delete channel", canDelete],
+    ] as const) {
+      const button = screen.queryByRole("button", { name: label });
+      if (permitted) {
+        expect(button).toBeEnabled();
+        await user.click(screen.getByRole("button", { name: label }));
+        expect(choose).toHaveBeenLastCalledWith(action, button);
+      } else expect(button).toBeNull();
+    }
+    expect(lifecycle.load).toHaveBeenCalledOnce();
+    expect(lifecycle.run).not.toHaveBeenCalled();
+  },
+);
+
+it("removes previously allowed actions when the replacement permission read fails", async () => {
+  const lifecycle = capability();
+  lifecycle.load.mockResolvedValueOnce({
+    ...settings,
+    canArchive: true,
+    canDelete: true,
+  });
+  const mounted = render(
+    <ChannelLifecycleActions
+      channelId={settings.channelId}
+      lifecycle={lifecycle}
+      choose={vi.fn()}
+    />,
+  );
+  await screen.findByRole("button", { name: "Delete channel" });
+  const replacement = capability();
+  replacement.load.mockRejectedValueOnce(new Error("Permissions unavailable"));
+  mounted.rerender(
+    <ChannelLifecycleActions
+      channelId={settings.channelId}
+      lifecycle={replacement}
+      choose={vi.fn()}
+    />,
+  );
+  expect(screen.queryByRole("button")).toBeNull();
+  await screen.findByRole("alert");
+  expect(screen.getAllByRole("button")).toHaveLength(1);
+  expect(
+    screen.getByRole("button", { name: "Retry channel permissions" }),
+  ).toBeEnabled();
+  replacement.load.mockResolvedValueOnce({
+    ...settings,
+    canLeave: false,
+    canArchive: true,
+    canDelete: false,
+  });
+  await userEvent
+    .setup()
+    .click(screen.getByRole("button", { name: "Retry channel permissions" }));
+  await screen.findByRole("button", { name: "Archive channel" });
+  expect(screen.queryByRole("button", { name: "Delete channel" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Leave channel" })).toBeNull();
 });

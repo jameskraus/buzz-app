@@ -252,6 +252,7 @@ it("confirmation, pending lockout and failed-write recovery stay in the actual d
   const confirm = screen.getByRole("button", {
     name: "Delete channel",
   }) as HTMLButtonElement;
+  expect(confirm.getAttribute("data-variant")).toBe("destructive");
   expect(confirm.disabled).toBe(true);
   await user.type(
     screen.getByRole("textbox", { name: "Channel name confirmation" }),
@@ -301,7 +302,18 @@ it.each(["leave", "hide", "archive"] as const)(
       hide: "Hide conversation",
       archive: "Archive channel",
     }[action];
-    await user.click(screen.getByRole("button", { name: label }));
+    const confirm = screen.getByRole("button", { name: label });
+    expect(confirm.getAttribute("data-variant")).toBe(
+      action === "archive" ? "subtle" : "destructive",
+    );
+    if (action === "archive") {
+      expect(
+        screen.getByText(
+          "Archive this channel for everyone and remove it from the sidebar. Messages are kept. You can unarchive it later.",
+        ),
+      ).toBeDefined();
+    }
+    await user.click(confirm);
     expect(lifecycle.run).toHaveBeenCalledWith(
       action,
       "id",

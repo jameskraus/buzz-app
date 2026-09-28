@@ -12,7 +12,7 @@ const copy = {
   archive: {
     title: "Archive channel",
     detail:
-      "Archive this channel for everyone and remove it from the sidebar. Messages are retained. A channel administrator can unarchive it from another supported client.",
+      "Archive this channel for everyone and remove it from the sidebar. Messages are kept. You can unarchive it later.",
   },
   delete: {
     title: "Delete channel",
@@ -127,7 +127,7 @@ export function ChannelLifecycleDialog({
         </Button>
         <Button
           type="button"
-          variant="destructive"
+          variant={action === "archive" ? "subtle" : "destructive"}
           disabled={
             busy ||
             refreshRequired ||
