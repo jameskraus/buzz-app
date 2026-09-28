@@ -19,6 +19,7 @@ import * as destinations from "../../features/communities/destination";
 import { createAgentControl } from "../../features/agents/control";
 import { controlFixture } from "../../features/agents/control-testing";
 import { createRelaySession } from "../../features/relay/session";
+import { keypair, signed } from "../../features/relay/testing";
 import type { ReadTransport } from "../../features/relay/transport";
 import type { RelaySnapshot } from "../../features/relay/service";
 import { bindNames } from "../../features/identity-names/service";
@@ -492,5 +493,45 @@ it("discards late results across viewers and removes departed communities withou
   act(() => changeClient(joined([], "ee".repeat(32))));
   expect(
     screen.queryByRole("article", { name: `Agent ${newKey.slice(0, 12)}` }),
+  ).toBeNull();
+});
+
+it("keeps the last public name for a retained identity when its community read fails", async () => {
+  const agent = keypair();
+  const profile = signed(agent, {
+    kind: 0,
+    tags: [],
+    content: JSON.stringify({ name: "Docs writer" }),
+  });
+  const request = vi
+    .spyOn(communityApi, "communityRequest")
+    .mockImplementation(async (_id, route) =>
+      route === "query" ? [profile] : { identities: [agent.pubkey] },
+    );
+  setup(
+    "ready",
+    (f) => {
+      f.data.agents = [];
+      f.data.parked = [];
+    },
+    [],
+    [],
+    joined(["https://other.example"]),
+  );
+  expect(
+    await screen.findByRole("article", { name: "Agent Docs writer" }),
+  ).toBeVisible();
+  request.mockImplementation(async () => {
+    throw Error("unavailable");
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Refresh agents" }));
+  await screen.findByText(/could not be checked for https:\/\/other.example/);
+  expect(
+    screen.getByRole("article", { name: "Agent Docs writer" }),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole("article", {
+      name: `Agent ${agent.pubkey.slice(0, 12)}`,
+    }),
   ).toBeNull();
 });

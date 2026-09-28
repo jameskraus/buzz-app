@@ -46,7 +46,8 @@ export function useCommunityInventory(
   const [known, setKnown] = useState<{
     viewer?: string;
     identities: Record<string, string[]>;
-  }>({ identities: {} });
+    profiles: Record<string, ReadonlyMap<string, Profile>>;
+  }>({ identities: {}, profiles: {} });
   useEffect(() => {
     setRead({ scope, results: {} });
     if (!ready || !viewer) return;
@@ -68,6 +69,7 @@ export function useCommunityInventory(
               ...(saved.viewer === viewer ? saved.identities : {}),
               [community]: identities,
             },
+            profiles: saved.viewer === viewer ? saved.profiles : {},
           }));
           setRead((saved) => ({
             scope,
@@ -79,14 +81,22 @@ export function useCommunityInventory(
               identities,
               controller.signal,
             );
-            if (!controller.signal.aborted)
-              setRead((saved) => ({
-                scope,
-                results: {
-                  ...saved?.results,
-                  [community]: { identities, profiles },
-                },
-              }));
+            if (controller.signal.aborted) return;
+            setKnown((saved) =>
+              saved.viewer === viewer
+                ? {
+                    ...saved,
+                    profiles: { ...saved.profiles, [community]: profiles },
+                  }
+                : saved,
+            );
+            setRead((saved) => ({
+              scope,
+              results: {
+                ...saved?.results,
+                [community]: { identities, profiles },
+              },
+            }));
           } catch {
             if (!controller.signal.aborted)
               setRead((saved) => ({
@@ -120,9 +130,15 @@ export function useCommunityInventory(
   }
   const profiles = new Map<string, Profile & { community: string }>();
   // Stable source choice, independent of response order. Never cross viewer scope.
+  // Until a community answers again, its last profiles label its retained identities.
   for (const community of communities) {
-    for (const [key, profile] of results[community]?.profiles ?? [])
-      if (!profiles.has(key)) profiles.set(key, { ...profile, community });
+    const current = results[community]?.profiles;
+    const retained = communityIdentities.get(community) ?? [];
+    const last =
+      known.viewer === viewer ? known.profiles[community] : undefined;
+    for (const [key, profile] of current ?? last ?? [])
+      if (!profiles.has(key) && (current || retained.includes(key)))
+        profiles.set(key, { ...profile, community });
   }
   return {
     profiles,
