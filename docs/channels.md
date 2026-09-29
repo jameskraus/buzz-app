@@ -296,29 +296,20 @@ change shared-menu styling.
 The row menu resolves fresh relay-authored metadata (`39000`), administrators
 (`39001`) and membership (`39002`) at exact channel coordinates before offering
 Archive/Delete/Leave or DM Hide. Archive requires a direct owner/admin role;
-Delete requires a direct owner role or verified ownership of an active owner-role
-agent; the last owner cannot Leave. The menu omits
-Leave when it is forbidden, without an ownership-transfer explanation. Action
-labels have no trailing ellipsis. DMs offer Hide
-only. For the owner-agent Delete path, the shared lifecycle capability uses the
-relay's version-1 `channel_delete_authority` extension over authenticated `POST
-/query`, discovered through host-bound NIP-11 metadata. The exact single-channel
-filter binds the signed request to the viewer; the bounded response envelope must
-match the discovered community, viewer and channel. This uses the same persisted
-agent-owner mapping and active owner roster as kind 9008, not current profile tags.
-Profile replacement neither transfers nor revokes that first-write-wins mapping.
-An authoritative `false` omits Delete. An absent capability or failed read instead
-explains **Delete permissions unavailable**, with retry for transient failures;
-independently verified Archive/Leave remain available. A five-second optional-read
-deadline, caller cancellation and access/session fences reject late authority.
+Delete requires the viewer's own identity to have the direct owner role; the last
+owner cannot Leave. The menu omits Leave when it is forbidden, without an
+ownership-transfer explanation. Action labels have no trailing ellipsis. DMs offer
+Hide only.
 
-This requires deployment of the relay capability for owner-agent Delete. Older
-relays still support direct-owner Delete from signed channel state; they cannot
-establish owner-agent eligibility. No profile fallback is used. The viewer signs
-the unchanged Delete command, and the relay checks current authority again:
-the read is eligibility evidence, never a write grant or protection against races.
-Existing viewer-membership requirements remain; nonmember owner-agent access,
-owner-agent Archive authority and community-admin overrides are not added.
+Delete is deliberately direct-owner-only in this app. Owning an agent that has the
+channel's owner role does not expose Delete in either Settings or the sidebar,
+even if the relay would accept that human's Delete command. Agent profiles are not
+permission evidence, and no optional authority query or relay upgrade is required.
+Archive/Leave depend only on the viewer's own channel role. The viewer signs the
+unchanged Delete command, and the relay checks current authority again; client
+eligibility is never a write grant or protection against races. Existing
+viewer-membership requirements remain; nonmember access, owner-agent Archive
+authority and community-admin overrides are not added.
 Membership accepts NIP-29 `p` tags with optional relay and role fields
 (`["p", pubkey, relay_hint?, role?]`), including the relay's four-field roster.
 These fields never substitute for the separate administrator record. Invalid
@@ -332,10 +323,9 @@ Channel Settings also offers **Leave channel**, **Archive channel** and **Delete
 channel** in its tools area, using one fresh lifecycle permission check. Each
 entry follows its own permission result: a last owner can Archive/Delete even
 though Leave is forbidden, while an ordinary admin can Archive but not Delete.
-An admin/member who verifiably owns an owner-role agent can also Delete. Forbidden
-entries are omitted; failed checks offer retry and unsupported connections explain
-unavailability. DMs, sessions and read-only nonmember/cached views have no channel
-lifecycle entries. Archived channels cannot be deleted, by direct or agent owners:
+Forbidden entries are omitted; failed checks offer retry and unsupported
+connections explain unavailability. DMs, sessions and read-only nonmember/cached views have no channel
+lifecycle entries. Archived channels cannot be deleted:
 the relay rejects Delete while archived. An administrator must restore the channel
 through another supported client before deletion.
 These controls hand off to the same persistent sidebar confirmation/navigation
@@ -352,9 +342,8 @@ requiring the channel name to be typed. Metadata and member-role editing remain
 separate.
 
 Each command has explicit confirmation. The lifecycle owner rechecks authority
-before signing and again before publication (including a fresh relay authority read
-for owner-agent Delete), validates the returned command, and
-confirms relay-owned state before removing a row. Archive retains membership;
+from signed channel state before signing and again before publication, validates
+the returned command, and confirms relay-owned state before removing a row. Archive retains membership;
 confirmed Delete/Leave use the existing access-loss purge. Commands use narrow
 development-broker routes, never the message outbox or automatic replay. Hosts
 without this capability display an unavailable notice; native/direct-signer parity

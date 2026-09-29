@@ -1,5 +1,4 @@
 import { getEventHash } from "nostr-tools";
-import type { ChannelDeleteAuthority } from "./channel-delete-authority";
 import type { RelayReader } from "./reader";
 import type { RelayWriter } from "./transport";
 import { PublishRejected } from "./outbox";
@@ -49,7 +48,6 @@ export interface ChannelLifecycleCapability {
 export function createChannelLifecycle({
   reader,
   writer,
-  readDeleteAuthority,
   viewer,
   relayAuthor,
   canAccess,
@@ -58,7 +56,6 @@ export function createChannelLifecycle({
 }: {
   reader?: RelayReader | undefined;
   writer?: RelayWriter | undefined;
-  readDeleteAuthority?: ChannelDeleteAuthority | undefined;
   viewer: string;
   relayAuthor: string;
   canAccess(id: string): boolean;
@@ -128,40 +125,12 @@ export function createChannelLifecycle({
       throw new Error("Unexpected channel state response");
     return events;
   }
-  async function load(id: string, signal: AbortSignal, checkOwnedAgent = true) {
+  async function load(id: string, signal: AbortSignal) {
     assertAccess(id);
     const events = await read([39000, 39001, 39002], id, signal);
     assertAccess(id);
-    const settings = lifecycleSettings(events, id, viewer, relayAuthor);
-    const metadata = lifecycleRecord(events, 39000, id, relayAuthor);
-    if (
-      !reader ||
-      !checkOwnedAgent ||
-      settings.canDelete ||
-      settings.canHide ||
-      (metadata && exactLifecycleTag(metadata, "archived") === "true")
-    )
-      return settings;
-    if (!readDeleteAuthority)
-      return Object.freeze({ ...settings, deleteUnavailable: "unsupported" });
-    const authoritySignal = AbortSignal.any([
-      signal,
-      AbortSignal.timeout(5000),
-    ]);
-    try {
-      const canDelete = await readDeleteAuthority(id, authoritySignal);
-      authoritySignal.throwIfAborted();
-      assertAccess(id);
-      return Object.freeze({ ...settings, canDelete });
-    } catch {
-      // An optional authority outage cannot erase independently verified actions.
-      // Cancellation/access loss, unlike that outage, still invalidates the whole read.
-      signal.throwIfAborted();
-      assertAccess(id);
-      return Object.freeze({ ...settings, deleteUnavailable: "error" });
-    }
+    return lifecycleSettings(events, id, viewer, relayAuthor);
   }
-
   async function readVisibility(signal: AbortSignal) {
     const events = await read([DM_VISIBILITY_KIND], viewer, signal, true);
     const record = lifecycleRecord(
@@ -237,7 +206,7 @@ export function createChannelLifecycle({
       try {
         await owned(async (signal) => {
           const authorize = async () => {
-            const settings = await load(id, signal, action === "delete");
+            const settings = await load(id, signal);
             const permitted = {
               archive: settings.canArchive,
               delete: settings.canDelete,
@@ -246,11 +215,9 @@ export function createChannelLifecycle({
             }[action];
             if (!permitted)
               throw new Error(
-                action === "delete" && settings.deleteUnavailable
-                  ? "Delete permissions unavailable. Refresh channel permissions."
-                  : action === "leave" && settings.leaveReason
-                    ? settings.leaveReason
-                    : "This action is no longer permitted. Refresh channel permissions.",
+                action === "leave" && settings.leaveReason
+                  ? settings.leaveReason
+                  : "This action is no longer permitted. Refresh channel permissions.",
               );
           };
           await authorize();

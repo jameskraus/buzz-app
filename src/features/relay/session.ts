@@ -679,7 +679,6 @@ export function createRelaySession(
   const lifecycle = createChannelLifecycle({
     reader: transport && !options.cachedOnly ? requests.reader : undefined,
     writer: transport?.channelLifecycle,
-    readDeleteAuthority: transport?.readChannelDeleteAuthority,
     viewer: transport?.viewer ?? "",
     relayAuthor: transport?.relayAuthor ?? "",
     canAccess: (id) => !closed && channels.canParticipate(id),

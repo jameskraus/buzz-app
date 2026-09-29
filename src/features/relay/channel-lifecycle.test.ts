@@ -30,12 +30,7 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
-function harness(
-  role = "owner",
-  type = "stream",
-  owners = 1,
-  authority = true,
-) {
+function harness(role = "owner", type = "stream", owners = 1) {
   let timestamp = 100;
   const record = (kind: number, tags: string[][], content = "") =>
     finalizeEvent({ kind, tags, content, created_at: timestamp++ }, relayKey);
@@ -113,13 +108,9 @@ function harness(
   });
   const removed = vi.fn();
   const acceptDiscovery = vi.fn();
-  const readDeleteAuthority = vi.fn(
-    async (_id: string, _signal: AbortSignal) => false,
-  );
   const owner = createChannelLifecycle({
     reader: { read },
     writer: { sign, publish },
-    readDeleteAuthority: authority ? readDeleteAuthority : undefined,
     viewer,
     relayAuthor,
     canAccess: () => active,
@@ -127,7 +118,6 @@ function harness(
     acceptDiscovery,
   });
   return {
-    readDeleteAuthority,
     owner,
     read,
     sign,
@@ -619,40 +609,35 @@ function agentProfile(tags = [ownerTag()], created_at = 200) {
     agentKey,
   );
 }
-function ownedAgent(role = "admin") {
-  const h = harness(role, "stream", 2);
-  h.readDeleteAuthority.mockResolvedValue(true);
-  return h;
-}
-
-describe("relay-backed channel Delete authority", () => {
+describe("direct-owner-only channel Delete", () => {
   it.each(["admin", "member"])(
-    "a %s uses the relay decision without acquiring other roles",
+    "a %s owning an owner-role agent retains base actions but cannot Delete",
     async (role) => {
-      const h = ownedAgent(role);
+      const h = harness(role, "stream", 2);
+      h.setEvents([...h.getEvents(), agentProfile()]);
       expect(await h.owner.capability.load(id)).toMatchObject({
-        canDelete: true,
+        canDelete: false,
         canArchive: role === "admin",
         canLeave: true,
       });
-      h.readDeleteAuthority.mockClear();
-      await h.owner.capability.run("delete", id);
-      expect(h.readDeleteAuthority).toHaveBeenCalledTimes(2);
-      expect(h.readDeleteAuthority).toHaveBeenCalledWith(
-        id,
-        expect.any(AbortSignal),
+      await expect(h.owner.capability.run("delete", id)).rejects.toThrow(
+        "no longer permitted",
       );
+      expect(h.sign).not.toHaveBeenCalled();
+      expect(h.publish).not.toHaveBeenCalled();
+      // No profile or optional authority lookup can gate Archive/Leave.
+      expect(h.read.mock.calls).toHaveLength(2);
+      for (const [filters] of h.read.mock.calls)
+        expect(filters).toEqual(
+          [39000, 39001, 39002].map((kind) => ({
+            kinds: [kind],
+            authors: [relayAuthor],
+            "#d": [id],
+            limit: 1,
+          })),
+        );
+      await h.owner.capability.run(role === "admin" ? "archive" : "leave", id);
       expect(h.publish).toHaveBeenCalledOnce();
-      expect(h.publish.mock.calls[0]?.[0]).toMatchObject({
-        pubkey: viewer,
-        kind: 9008,
-        tags: [["h", id]],
-      });
-      expect(
-        h.read.mock.calls.some(([filters]) =>
-          filters.some((f) => f.kinds?.includes(0)),
-        ),
-      ).toBe(false);
       h.owner.dispose();
     },
   );
@@ -663,49 +648,61 @@ describe("relay-backed channel Delete authority", () => {
     ["foreign attestation", [agentProfile([ownerTag(other, relayKey)])]],
     ["replaced profile", [agentProfile(), agentProfile([], 201)]],
   ] as const)(
-    "%s profile cannot override the relay decision",
+    "%s profile cannot change direct-owner eligibility",
     async (_label, profiles) => {
-      const h = ownedAgent();
-      h.setEvents([...h.getEvents(), ...profiles]);
-      h.readDeleteAuthority.mockResolvedValue(false);
-      expect((await h.owner.capability.load(id)).canDelete).toBe(false);
-      await expect(h.owner.capability.run("delete", id)).rejects.toThrow(
-        "no longer permitted",
-      );
-      expect(h.sign).not.toHaveBeenCalled();
-      h.readDeleteAuthority.mockResolvedValue(true);
-      expect((await h.owner.capability.load(id)).canDelete).toBe(true);
-      h.owner.dispose();
+      for (const role of ["owner", "admin", "member"]) {
+        const h = harness(role, "stream", 2);
+        h.setEvents([...h.getEvents(), ...profiles]);
+        expect((await h.owner.capability.load(id)).canDelete).toBe(
+          role === "owner",
+        );
+        expect(h.read).toHaveBeenCalledOnce();
+        expect(
+          h.read.mock.calls[0]?.[0].flatMap((filter) => filter.kinds),
+        ).toEqual([39000, 39001, 39002]);
+        h.owner.dispose();
+      }
     },
   );
-  it("does not bypass viewer membership", async () => {
-    const h = ownedAgent("member");
+  it("does not bypass direct-owner membership", async () => {
+    const h = harness();
     h.setEvents(
-      h.getEvents().map((event) =>
-        event.kind === 39002
-          ? h.record(39002, [
-              ["d", id],
-              ["p", other],
-            ])
-          : event,
-      ),
+      h.getEvents().map((event) => {
+        if (event.kind === 39001)
+          return h.record(39001, [
+            ["d", id],
+            ["p", other, "owner"],
+          ]);
+        if (event.kind === 39002)
+          return h.record(39002, [
+            ["d", id],
+            ["p", other],
+          ]);
+        return event;
+      }),
     );
     await expect(h.owner.capability.run("delete", id)).rejects.toThrow(
       "no longer a channel member",
     );
-    expect(h.readDeleteAuthority).not.toHaveBeenCalled();
+    expect(h.sign).not.toHaveBeenCalled();
+    expect(h.publish).not.toHaveBeenCalled();
     h.owner.dispose();
   });
   it.each(["before signing", "before publication"])(
-    "rereads authority %s",
+    "rereads direct ownership %s",
     async (when) => {
-      const h = ownedAgent();
+      const h = harness("owner", "stream", 2);
       expect((await h.owner.capability.load(id)).canDelete).toBe(true);
-      if (when === "before signing")
-        h.readDeleteAuthority.mockResolvedValue(false);
+      const demote = () =>
+        h.setEvents(
+          h
+            .getEvents()
+            .map((event) => (event.kind === 39001 ? h.roles("admin") : event)),
+        );
+      if (when === "before signing") demote();
       else
         h.sign.mockImplementationOnce(async (event) => {
-          h.readDeleteAuthority.mockResolvedValue(false);
+          demote();
           return finalizeEvent(event, key);
         });
       await expect(h.owner.capability.run("delete", id)).rejects.toThrow(
@@ -716,134 +713,60 @@ describe("relay-backed channel Delete authority", () => {
       h.owner.dispose();
     },
   );
-  it.each(["admin", "member"])(
-    "failed authority preserves %s base actions and retry",
+  it.each(["owner", "admin", "member"])(
+    "archived %s cannot Delete until restored",
     async (role) => {
-      const h = ownedAgent(role);
-      h.readDeleteAuthority.mockRejectedValue(new Error("unavailable"));
-      expect(await h.owner.capability.load(id)).toMatchObject({
-        canDelete: false,
-        deleteUnavailable: "error",
-        canArchive: role === "admin",
-        canLeave: true,
-      });
-      await expect(h.owner.capability.run("delete", id)).rejects.toThrow(
-        "Delete permissions unavailable",
-      );
-      expect(h.sign).not.toHaveBeenCalled();
-      h.readDeleteAuthority.mockResolvedValue(true);
-      expect(await h.owner.capability.load(id)).toMatchObject({
-        canDelete: true,
-      });
-      h.owner.dispose();
-    },
-  );
-  it.each(["owner", "admin"])(
-    "archived %s cannot Delete or regain it from agent authority",
-    async (role) => {
-      const h = role === "owner" ? harness("owner") : ownedAgent();
-      const archive = () =>
+      const h = harness(role, "stream", 2);
+      const metadata = (archived: boolean) =>
         h.setEvents(
           h
             .getEvents()
             .map((event) =>
-              event.kind === 39000
-                ? h.record(39000, [...event.tags, ["archived", "true"]])
-                : event,
+              event.kind === 39000 ? h.metadata(archived) : event,
             ),
         );
-      archive();
+      metadata(true);
       expect(await h.owner.capability.load(id)).toMatchObject({
         canDelete: false,
         canArchive: false,
+        canLeave: true,
       });
-      expect(h.readDeleteAuthority).not.toHaveBeenCalled();
       await expect(h.owner.capability.run("delete", id)).rejects.toThrow(
         "no longer permitted",
       );
       expect(h.sign).not.toHaveBeenCalled();
+      metadata(false);
+      expect((await h.owner.capability.load(id)).canDelete).toBe(
+        role === "owner",
+      );
       h.owner.dispose();
     },
   );
-  it.each(["owner", "admin"])(
-    "archiving an %s channel during signing prevents Delete publication",
-    async (role) => {
-      const h = role === "owner" ? harness("owner") : ownedAgent();
-      h.sign.mockImplementationOnce(async (event) => {
-        h.setEvents(
-          h
-            .getEvents()
-            .map((record) =>
-              record.kind === 39000
-                ? h.record(39000, [...record.tags, ["archived", "true"]])
-                : record,
-            ),
-        );
-        return finalizeEvent(event, key);
-      });
-      await expect(h.owner.capability.run("delete", id)).rejects.toThrow(
-        "no longer permitted",
+  it("archiving during signing prevents direct-owner Delete publication", async () => {
+    const h = harness();
+    h.sign.mockImplementationOnce(async (event) => {
+      h.setEvents(
+        h
+          .getEvents()
+          .map((record) => (record.kind === 39000 ? h.metadata(true) : record)),
       );
-      expect(h.sign).toHaveBeenCalledOnce();
-      expect(h.publish).not.toHaveBeenCalled();
-      h.owner.dispose();
-    },
-  );
-  it("a late authority result after its deadline cannot grant Delete", async () => {
-    const h = ownedAgent();
-    const deadline = new AbortController();
-    const original = AbortSignal.timeout;
-    const timeout = vi
-      .spyOn(AbortSignal, "timeout")
-      .mockImplementation((ms) =>
-        ms === 5000 ? deadline.signal : original(ms),
-      );
-    const gate = deferred<boolean>(),
-      started = deferred<void>();
-    h.readDeleteAuthority.mockImplementationOnce(() => {
-      started.resolve();
-      return gate.promise;
-    });
-    try {
-      const result = h.owner.capability.load(id);
-      await started.promise;
-      deadline.abort();
-      gate.resolve(true);
-      expect(await result).toMatchObject({
-        canDelete: false,
-        deleteUnavailable: "error",
-        canArchive: true,
-        canLeave: true,
-      });
-    } finally {
-      timeout.mockRestore();
-      h.owner.dispose();
-    }
-  });
-  it("unsupported authority is distinct from a denial and leaves base permissions usable", async () => {
-    const h = harness("admin", "stream", 2, false);
-    expect(await h.owner.capability.load(id)).toMatchObject({
-      canDelete: false,
-      deleteUnavailable: "unsupported",
-      canArchive: true,
-      canLeave: true,
+      return finalizeEvent(event, key);
     });
     await expect(h.owner.capability.run("delete", id)).rejects.toThrow(
-      "Delete permissions unavailable",
+      "no longer permitted",
     );
-    expect(h.sign).not.toHaveBeenCalled();
-    await h.owner.capability.run("archive", id);
-    expect(h.publish).toHaveBeenCalledOnce();
+    expect(h.sign).toHaveBeenCalledOnce();
+    expect(h.publish).not.toHaveBeenCalled();
     h.owner.dispose();
   });
   it.each(["clear", "dispose", "cancel", "caller", "access"] as const)(
-    "%s fences authority reads even when the host ignores abort",
+    "%s fences permission reads even when the host ignores abort",
     async (action) => {
-      const h = ownedAgent();
-      const gate = deferred<boolean>(),
+      const h = harness();
+      const gate = deferred<RelayEvent[]>(),
         started = deferred<void>();
       const caller = new AbortController();
-      h.readDeleteAuthority.mockImplementationOnce(() => {
+      h.read.mockImplementationOnce(() => {
         started.resolve();
         return gate.promise;
       });
@@ -852,26 +775,11 @@ describe("relay-backed channel Delete authority", () => {
       if (action === "caller") caller.abort();
       else if (action === "access") h.deny();
       else h.owner[action]();
-      gate.resolve(true);
+      gate.resolve(h.getEvents());
       await expect(result).rejects.toThrow();
       expect(h.sign).not.toHaveBeenCalled();
       expect(h.publish).not.toHaveBeenCalled();
       h.owner.dispose();
     },
   );
-  it("does not add optional authority reads to direct owners, DMs, Archive or Leave", async () => {
-    for (const type of ["stream", "dm"]) {
-      const h = harness("owner", type, 2);
-      await h.owner.capability.load(id);
-      expect(h.readDeleteAuthority).not.toHaveBeenCalled();
-      h.owner.dispose();
-    }
-    for (const action of ["archive", "leave"] as const) {
-      const h = ownedAgent();
-      h.readDeleteAuthority.mockRejectedValue(new Error("offline"));
-      await h.owner.capability.run(action, id);
-      expect(h.readDeleteAuthority).not.toHaveBeenCalled();
-      h.owner.dispose();
-    }
-  });
 });

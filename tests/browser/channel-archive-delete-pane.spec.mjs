@@ -146,11 +146,11 @@ for (const action of ["archive", "delete"]) {
   });
 }
 
-// Real broker/authority discovery -> both entry points -> shared dialog and
-// confirmed navigation is the browser boundary; the authority matrix is in Vitest.
-test.describe("owned-agent Delete", () => {
+// Production composition must apply the same direct-owner gate in both surfaces.
+// Profile/role permutations and signing races stay in the lifecycle unit tests.
+test.describe("owner-role agent without direct ownership", () => {
   test.use({ lifecycleRole: "admin", lifecycleOwnerAgent: true });
-  test("offers Delete in both surfaces and confirms through the shared owner", async ({
+  test("omits Delete in both surfaces while preserving Archive and Leave", async ({
     page,
     app,
   }) => {
@@ -175,53 +175,34 @@ test.describe("owned-agent Delete", () => {
     const menu = page.getByRole("menu", {
       name: "Actions for Lifecycle channel",
     });
-    await menu
-      .getByRole("menuitem", { name: "Delete channel", exact: true })
-      .click();
-    const dialog = page.getByRole("dialog", {
-      name: "Delete channel: Lifecycle channel",
-      exact: true,
-    });
-    await expect(dialog).toBeVisible();
-    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect(row).toBeFocused();
-    expect(app.report.lifecyclePublications ?? []).toHaveLength(0);
+    // Visible permitted actions are the completion barrier for negative assertions.
+    await expect(
+      menu.getByRole("menuitem", { name: "Archive channel", exact: true }),
+    ).toBeVisible();
+    await expect(
+      menu.getByRole("menuitem", { name: "Leave channel", exact: true }),
+    ).toBeVisible();
+    await expect(
+      menu.getByRole("menuitem", { name: "Delete channel", exact: true }),
+    ).toHaveCount(0);
+    await expect(menu.getByText(/Delete permissions/)).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(menu).toHaveCount(0);
     await page
       .getByRole("button", { name: "Channel settings", exact: true })
       .click();
     const panel = panelFor(page);
-    const trigger = panel.getByRole("button", {
-      name: "Delete channel",
-      exact: true,
-    });
-    await expect(trigger).toBeVisible();
+    await expect(
+      panel.getByRole("button", { name: "Archive channel", exact: true }),
+    ).toBeVisible();
     await expect(
       panel.getByRole("button", { name: "Leave channel", exact: true }),
     ).toBeVisible();
-    await trigger.click();
-    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect(trigger).toBeFocused();
-    expect(app.report.lifecyclePublications ?? []).toHaveLength(0);
-    await trigger.click();
-    await dialog
-      .getByRole("button", { name: "Delete channel", exact: true })
-      .click();
-    await expect(dialog).toHaveCount(0);
-    await expect(panel).toHaveCount(0);
-    await expect(row).toHaveCount(0);
     await expect(
-      page.getByRole("textbox", { name: "Message #Alpha", exact: true }),
-    ).toBeVisible();
-    await page.reload();
-    await expect(
-      sidebar.getByRole("button", { name: "Lifecycle channel", exact: true }),
+      panel.getByRole("button", { name: "Delete channel", exact: true }),
     ).toHaveCount(0);
-    await expect(
-      page.getByRole("textbox", { name: "Message #Alpha", exact: true }),
-    ).toBeVisible();
-    expect(app.report.lifecyclePublications.map((event) => event.kind)).toEqual(
-      [9008],
-    );
+    await expect(panel.getByText(/Delete permissions/)).toHaveCount(0);
+    expect(app.report.lifecyclePublications ?? []).toHaveLength(0);
     expect(app.report.unexpected).toEqual([]);
   });
 });

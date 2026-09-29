@@ -74,13 +74,7 @@ export function ChannelLifecycleMenu({
     );
   if (
     !state ||
-    !(
-      state.canHide ||
-      state.canArchive ||
-      state.canDelete ||
-      state.canLeave ||
-      state.deleteUnavailable
-    )
+    !(state.canHide || state.canArchive || state.canDelete || state.canLeave)
   )
     return null;
   return (
@@ -102,24 +96,6 @@ export function ChannelLifecycleMenu({
               </MenuIcon>
               Archive channel
             </MenuItem>
-          )}
-          {state.deleteUnavailable && (
-            <>
-              <MenuItem disabled>
-                {state.deleteUnavailable === "unsupported"
-                  ? "Delete permissions unavailable on this connection"
-                  : "Delete permissions unavailable"}
-              </MenuItem>
-              {state.deleteUnavailable === "error" && (
-                <MenuItem
-                  closeOnClick={false}
-                  disabled={disabled}
-                  onClick={() => setRetry((value) => value + 1)}
-                >
-                  Retry Delete permissions
-                </MenuItem>
-              )}
-            </>
           )}
           {state.canDelete && (
             <MenuItem disabled={disabled} onClick={() => choose("delete")}>

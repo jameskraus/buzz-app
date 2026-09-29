@@ -168,7 +168,6 @@ export const test = base.extend({
     const servedProfiles = new Map();
     const ownerAgentKey = lifecycleOwnerAgent ? generateSecretKey() : undefined;
     const ownerAgent = ownerAgentKey ? getPublicKey(ownerAgentKey) : undefined;
-    // Persisted relay ownership is independent of a profile's current auth tag.
     const ownerAgentProfile = ownerAgentKey
       ? sign(0, [], JSON.stringify({ name: "Channel agent" }), ownerAgentKey)
       : undefined;
@@ -779,25 +778,6 @@ export const test = base.extend({
               lifecycleTime,
             ),
           );
-      if (filter.channel_delete_authority === 1) {
-        expect(filter).toEqual({
-          kinds: [9008],
-          "#h": [expect.any(String)],
-          "#p": [viewer],
-          channel_delete_authority: 1,
-        });
-        return {
-          channel_delete_authority: 1,
-          community_id: communityIds[community],
-          pubkey: viewer,
-          channel_id: filter["#h"][0],
-          can_delete: Boolean(
-            ownerAgent &&
-              lifecycleRows.some((row) => row.id === filter["#h"][0]) &&
-              !archivedIds.has(filter["#h"][0]),
-          ),
-        };
-      }
       if (filter.kinds?.includes(30078)) {
         const events = [...readEvents.get(community).values()];
         if (readState && filter.read_state_snapshot === 1)
@@ -1250,14 +1230,6 @@ export const test = base.extend({
             : {}),
           discovery: (community) => ({
             self: getPublicKey(relayKey),
-            ...(channelLifecycle
-              ? {
-                  channel_delete_authority: {
-                    version: 1,
-                    community_id: communityIds[community],
-                  },
-                }
-              : {}),
             ...(readState
               ? {
                   read_state_snapshot: {
