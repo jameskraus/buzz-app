@@ -2408,6 +2408,121 @@ const PROTECTION_WORKERS: &[ProtectionWorkerFixture] = &[
 
 #[test]
 #[cfg(unix)]
+fn plugin_protection_copies_defaults_and_fails_closed_when_provider_retires() {
+    use crate::security::{Binding, Request};
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let mut controller = Controller::new(
+        Store::open(dir.path().join("config")).unwrap(),
+        Arc::new(Memory),
+        Err("No fixture runtime".into()),
+        dir.path().join("ownership"),
+    );
+    let executable = dir.path().join("protection");
+    fs::write(&executable, "#!/bin/sh\nexit 0\n").unwrap();
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+    let register = || Request::Register {
+        provider: "test.security".into(),
+        executable: executable.clone(),
+    };
+    let lease = controller.security(register()).unwrap()["lease"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let binding = Binding {
+        provider: "test.security".into(),
+        policy: json!({"network":"selected"}),
+    };
+    controller
+        .security(Request::Defaults {
+            revision: 0,
+            binding: Some(binding.clone()),
+        })
+        .unwrap();
+    assert!(controller
+        .security(Request::Defaults {
+            revision: 0,
+            binding: None
+        })
+        .is_err());
+    let a = agent(dir.path());
+    controller.store.insert(vec![a.clone()]).unwrap();
+    controller
+        .security(Request::Defaults {
+            revision: 1,
+            binding: None,
+        })
+        .unwrap();
+    let saved = controller.store.agents().unwrap().remove(0);
+    assert_eq!(
+        saved.extra["launchProtection"],
+        serde_json::to_value(&binding).unwrap()
+    );
+    let temporary = tempfile::tempdir().unwrap();
+    let mut cmd = Command::new("/bin/true");
+    cmd.env("BUZZ_ACP_AGENT_COMMAND", "/runtime/buzz-agent");
+    controller
+        .wrap_protected_worker(&saved, &mut cmd, temporary.path())
+        .unwrap();
+    let launch: serde_json::Value =
+        serde_json::from_slice(&fs::read(temporary.path().join("launch-protection.json")).unwrap())
+            .unwrap();
+    assert_eq!(launch["policy"], binding.policy);
+    assert_eq!(launch["relayUrl"], saved.relay_url);
+    assert!(cmd
+        .get_envs()
+        .any(|(k, v)| k == "BUZZ_ACP_AGENT_COMMAND" && v == Some(executable.as_os_str())));
+    // A late disposal cannot remove a replacement provider.
+    let next = controller.security(register()).unwrap();
+    controller
+        .security(Request::Unregister {
+            provider: binding.provider.clone(),
+            lease,
+        })
+        .unwrap();
+    assert_eq!(
+        controller.security(Request::Snapshot).unwrap()["availableProviders"],
+        json!(["test.security"])
+    );
+    controller
+        .security(Request::Unregister {
+            provider: binding.provider.clone(),
+            lease: next["lease"].as_str().unwrap().into(),
+        })
+        .unwrap();
+    let error = controller
+        .wrap_protected_worker(&saved, &mut cmd, temporary.path())
+        .unwrap_err();
+    assert!(error.contains("unavailable"));
+    controller.security(register()).unwrap();
+    fs::write(&executable, "#!/bin/sh\nexit 1\n").unwrap();
+    assert!(controller
+        .wrap_protected_worker(&saved, &mut cmd, temporary.path())
+        .unwrap_err()
+        .contains("changed"));
+    assert!(controller
+        .security(Request::Agent {
+            id: saved.id.clone(),
+            revision: saved.revision + 1,
+            binding: None
+        })
+        .is_err());
+    controller
+        .security(Request::Agent {
+            id: saved.id.clone(),
+            revision: saved.revision,
+            binding: None,
+        })
+        .unwrap();
+    let cleared = controller.store.agents().unwrap().remove(0);
+    assert_eq!(cleared.revision, saved.revision + 1);
+    controller
+        .wrap_protected_worker(&cleared, &mut cmd, temporary.path())
+        .unwrap();
+}
+
+#[test]
+#[cfg(unix)]
 fn provider_runs_through_controller_start_restart_and_missing_provider_fails_closed() {
     for worker in PROTECTION_WORKERS {
         protected_worker_lifecycle(worker);

@@ -407,10 +407,20 @@ impl Store {
     /// One atomic import batch; repairs add only the missing team snapshot.
     pub(crate) fn import(
         &mut self,
-        agents: Vec<Agent>,
+        mut agents: Vec<Agent>,
         repairs: Vec<(String, u64, String)>,
     ) -> Result<()> {
         let mut doc = self.read()?;
+        let defaults = crate::security::defaults(&doc)?;
+        for agent in &mut agents {
+            if defaults.is_some() && !agent.extra.contains_key("launchProtection") {
+                agent.extra.insert(
+                    "launchProtection".into(),
+                    serde_json::to_value(&defaults)
+                        .map_err(|_| "Could not encode protection defaults")?,
+                );
+            }
+        }
         for (id, revision, instructions) in repairs {
             let agent = doc
                 .agents
@@ -430,9 +440,7 @@ impl Store {
         self.write(&doc)
     }
     pub(crate) fn insert(&mut self, agents: Vec<Agent>) -> Result<()> {
-        let mut doc = self.read()?;
-        doc.agents.extend(agents);
-        self.write(&doc)
+        self.import(agents, Vec::new())
     }
 }
 impl Drop for Store {

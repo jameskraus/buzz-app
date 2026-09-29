@@ -1,5 +1,5 @@
 //! Generic, native-owned launch protection. Provider code and policy schemas are external.
-use crate::{config::Agent, runtime::Controller, Result};
+use crate::{config::Agent, runtime::Controller, store::Document, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -34,6 +34,10 @@ pub enum Request {
         provider: String,
         lease: String,
     },
+    Defaults {
+        revision: u64,
+        binding: Option<Binding>,
+    },
     Agent {
         id: String,
         revision: u64,
@@ -61,11 +65,20 @@ fn validate(binding: &Option<Binding>) -> Result<()> {
     }
     Ok(())
 }
+pub(crate) fn defaults(doc: &Document) -> Result<Option<Binding>> {
+    decode(doc.extra.get(KEY))
+}
 fn decode(value: Option<&Value>) -> Result<Option<Binding>> {
     let binding = serde_json::from_value(value.cloned().unwrap_or(Value::Null))
         .map_err(|_| "Saved protection is malformed; launch refused")?;
     validate(&binding)?;
     Ok(binding)
+}
+fn revision(doc: &Document) -> Result<u64> {
+    match doc.extra.get("launchProtectionRevision") {
+        None => Ok(0),
+        Some(v) => v.as_u64().ok_or("Invalid protection revision".into()),
+    }
 }
 fn executable_digest(path: &Path) -> Result<Vec<u8>> {
     if !path.is_absolute() {
@@ -126,6 +139,27 @@ impl Controller {
                 }
                 self.security_snapshot()
             }
+            Request::Defaults {
+                revision: expected,
+                binding,
+            } => {
+                validate(&binding)?;
+                self.require_provider(&binding)?;
+                let mut doc = self.store.read()?;
+                if revision(&doc)? != expected {
+                    return Err("Protection defaults changed; reload before saving".into());
+                }
+                doc.extra.insert(
+                    KEY.into(),
+                    serde_json::to_value(binding).map_err(|_| "Invalid defaults")?,
+                );
+                doc.extra.insert(
+                    "launchProtectionRevision".into(),
+                    json!(expected.checked_add(1).ok_or("Revision exhausted")?),
+                );
+                self.store.write(&doc)?;
+                self.security_snapshot()
+            }
             Request::Agent {
                 id,
                 revision: expected,
@@ -168,8 +202,10 @@ impl Controller {
             .iter()
             .map(|a| Ok(json!({"id": a.id, "binding": decode(a.extra.get(KEY))?})))
             .collect::<Result<Vec<_>>>()?;
-        Ok(json!({"agents": agents,
-            "availableProviders": self.security_providers.keys().collect::<Vec<_>>() }))
+        Ok(
+            json!({"revision": revision(&doc)?, "defaults": defaults(&doc)?, "agents": agents,
+            "availableProviders": self.security_providers.keys().collect::<Vec<_>>() }),
+        )
     }
     pub fn security_restore_ids(&mut self, provider: &str) -> Result<Vec<String>> {
         let running: Vec<_> = self
