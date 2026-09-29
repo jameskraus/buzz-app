@@ -92,8 +92,9 @@ being republished or silently re-dated. Missing/failed readback retains uncertai
 the user must inspect the conversation before explicitly sending a new message.
 
 Optional capabilities are absent until implemented: protected media/upload,
-workflow commands/history, repository HTTP, lifecycle and other broker-only
-helpers are not claimed by this adapter. Public HTTPS avatars/icons can display;
+owner/admin invite minting and member changes, workflow commands/history,
+repository HTTP, lifecycle and other broker-only helpers are not claimed by this
+adapter. Public HTTPS avatars/icons can display;
 protected media does not gain access from the image CSP allowance. NIP-FI assertion
 acquisition is not implemented, so deployments enforcing it are outside acceptance.
 Windows/Linux custody, credential migration and release-signing acceptance remain

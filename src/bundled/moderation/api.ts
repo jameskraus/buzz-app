@@ -3,6 +3,9 @@
 import { communityRequest } from "../../features/communities/api";
 import type { Member, Role } from "../../features/communities/roster";
 
+// The rail's gate for Invite to community, so both surfaces agree on which
+// builds can reach the broker-only `invite` and `member` routes below.
+export { inviteMintingAvailable } from "../../features/communities/api";
 export {
   MEMBERSHIP_KIND,
   membersFromSnapshot,

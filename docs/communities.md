@@ -73,7 +73,12 @@ Right-click a saved community (or press the ContextMenu key or Shift+F10 on it)
 for Mark all as read, Copy community URL, Invite to community, Community
 settings and, last, Leave community. Only the selected community can be marked
 read, and only while its read state syncs; Invite shows only where the viewer
-owns or administers the selected community and this build can mint invites. Copy,
+owns or administers the selected community and this build can mint invites. The
+Invites settings card applies the same gate: it stays registered in native
+builds so owners and admins can still read the relay-signed member list, but
+its Invite to community button and per-member actions are absent there, with a
+note that this build can't create invites or change members, since `invite` and
+`member` are broker routes the packaged adapter does not carry. Copy,
 Community settings and Leave work on inactive communities without opening their
 sessions. Leave asks for confirmation, then sends a signed NIP-43 leave request
 (kind 28936) to that community's relay before the device forgets it. Three
