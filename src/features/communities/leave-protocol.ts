@@ -20,10 +20,13 @@ const ABSENT = new Set([
   "invalid: you are not a relay member",
   "invalid: relay membership is not enabled",
 ]);
+// The relay refuses a banned identity at authentication, before any leave
+// handler runs, so no retry can ever succeed: access is already severed.
+const REVOKED = "blocked: you are banned from this community";
 const REFUSALS = new Set([
   ...ABSENT,
+  REVOKED,
   "invalid: relay owner cannot leave",
-  "blocked: you are banned from this community",
   "community writes are temporarily unavailable",
 ]);
 
@@ -38,7 +41,14 @@ export function leaveRefusal(body: unknown): string | undefined {
     : undefined;
 }
 
-/** A refusal meaning the relay holds no membership for the viewer to revoke. */
-export function membershipAbsent(reason: string) {
-  return ABSENT.has(reason);
+/** Refusals that still end the membership on this device. */
+export type SettledRefusal = "already-absent" | "access-revoked";
+
+/** Classifies a refusal after which nothing remains for the relay to release:
+ * it holds no membership for the viewer, or it has already severed the
+ * viewer's access. Any other refusal leaves the membership for a retry. */
+export function settledRefusal(reason: string): SettledRefusal | undefined {
+  if (ABSENT.has(reason)) return "already-absent";
+  if (reason === REVOKED) return "access-revoked";
+  return undefined;
 }

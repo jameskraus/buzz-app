@@ -1,7 +1,7 @@
 import { nativeIdentityEnabled } from "../identity/service";
 import { nativeCommunityRequest } from "./native-api";
 import { connectCommunityTransport, registerCommunity } from "./connection";
-import { membershipAbsent } from "./leave-protocol";
+import { settledRefusal, type SettledRefusal } from "./leave-protocol";
 import type { RelaySession } from "../relay/session";
 import type { PersonalProfile } from "./service";
 export type CommunityInfo = {
@@ -94,11 +94,13 @@ export async function publishProfile(
   if (!receipt.accepted || !receipt.event_id)
     throw new Error(receipt.message ?? "Profile publication was not confirmed");
 }
-export type LeaveOutcome = "left" | "already-absent";
+export type LeaveOutcome = "left" | SettledRefusal;
 /** Publishes a NIP-43 leave request to the community's relay by origin, without
- * acquiring a session. Resolves only once the relay accepts it or answers that
- * it holds no membership for the viewer; any other refusal, transport failure
- * or timeout throws and leaves the membership for the caller to retry. */
+ * acquiring a session. Resolves only once the relay accepts it, answers that
+ * it holds no membership for the viewer, or has banned the viewer (access is
+ * already severed, so nothing is left to release); any other refusal,
+ * transport failure or timeout throws and leaves the membership for the caller
+ * to retry. */
 export async function requestLeave(id: string): Promise<LeaveOutcome> {
   await registerCommunity(id, AbortSignal.timeout(12000));
   try {
@@ -111,8 +113,9 @@ export async function requestLeave(id: string): Promise<LeaveOutcome> {
       throw new Error(receipt.message ?? "The leave request was not confirmed");
     return "left";
   } catch (error) {
-    if (error instanceof Error && membershipAbsent(error.message))
-      return "already-absent";
+    const settled =
+      error instanceof Error ? settledRefusal(error.message) : undefined;
+    if (settled) return settled;
     throw error;
   }
 }

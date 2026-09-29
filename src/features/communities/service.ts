@@ -6,7 +6,11 @@ import { Context } from "@deepseek-ai/cordis";
 import { provideRelay, type RelayData } from "../relay/service";
 import { connectBrokerTransport, type ReadTransport } from "../relay/transport";
 import { communityDestination, isCommunityAlias } from "./destination";
-import { purgeCommunityDeviceState } from "./device-state";
+import {
+  purgeCommunityDeviceState,
+  purgeFailure,
+  type PurgeFailure,
+} from "./device-state";
 
 export const PROFILE_ABOUT_MAX_LENGTH = 500;
 export type PersonalProfile = { name: string; picture: string; about?: string };
@@ -306,11 +310,16 @@ export function createCommunities(
      * the membership (or never held one). Drops the membership, falls back to
      * Personal space when it was selected, disposes its retained session, then
      * purges the device state keyed by that origin and viewer. Persistence
-     * follows `joined`: required where the device record is the only copy. */
-    async leave(id: string) {
+     * follows `joined`: required where the device record is the only copy, and
+     * that save is the only step that throws, before anything has changed.
+     * Everything after it is best effort: a session that would not dispose or
+     * a store that would not clear is logged and returned, never thrown, since
+     * the membership is already gone and only a report can reach the viewer. */
+    async leave(id: string): Promise<PurgeFailure[]> {
       id = communityDestination(id).id;
-      if (!state.memberships.some((m) => m.id === id)) return;
+      if (!state.memberships.some((m) => m.id === id)) return [];
       const { viewer } = state;
+      const origin = communityDestination(id).url;
       update(
         {
           memberships: state.memberships.filter((m) => m.id !== id),
@@ -319,16 +328,26 @@ export function createCommunities(
         true,
         !!nativeConnect && !live,
       );
+      const failures: PurgeFailure[] = [];
       const scope = sessionScopes.get(id);
       sessions.delete(id);
       sessionScopes.delete(id);
       if (scope) {
-        scopes.splice(scopes.indexOf(scope), 1);
-        await scope.fiber.dispose();
+        // Every session scope comes from `newScope()`, so this always finds
+        // it; guarding keeps a miss from splicing another community's scope.
+        const index = scopes.indexOf(scope);
+        if (index !== -1) scopes.splice(index, 1);
+        try {
+          await scope.fiber.dispose();
+        } catch (error) {
+          failures.push(purgeFailure(origin, "session", error));
+        }
       }
-      // Nothing below can write to the purged stores: the session is gone.
+      // The session is gone (or at least detached), so nothing below can
+      // refill the purged stores.
       if (viewer)
-        await purgeCommunityDeviceState(communityDestination(id).url, viewer);
+        failures.push(...(await purgeCommunityDeviceState(origin, viewer)));
+      return failures;
     },
   };
 }

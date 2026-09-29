@@ -18,6 +18,7 @@ import type { UnreadCapability } from "../relay/unread";
 import { ToastProvider } from "../../shared/design-system/ui/Toast";
 import { CommunityRail } from "./CommunityRail";
 import { INVITES_SECTION } from "./CommunityRailItem";
+import type { PurgeFailure } from "./device-state";
 import { MEMBERSHIP_KIND, type Role } from "./roster";
 import {
   createCommunities,
@@ -53,6 +54,10 @@ function harness({
     : never,
   /** What the community's relay answers to the broker leave route. */
   leaveResponse = accepted as () => Response | Promise<Response>,
+  /** Stores the service could not clear after forgetting the community. */
+  leaveResidue = [] as PurgeFailure[],
+  /** The service's own failure to save the device record, before it changes. */
+  leaveError = undefined as Error | undefined,
 } = {}) {
   let snapshot: ClientSnapshot = {
     status: "ready",
@@ -74,14 +79,17 @@ function harness({
     notify();
   });
   // Mirrors the service: the membership goes, and a left selection lands on
-  // Personal space without the rail selecting anything.
+  // Personal space without the rail selecting anything. Only the save can
+  // throw, and it does so before anything changes.
   const leave = vi.fn(async (id: string) => {
+    if (leaveError) throw leaveError;
     snapshot = {
       ...snapshot,
       memberships: snapshot.memberships.filter((m) => m.id !== id),
       selected: snapshot.selected === id ? null : snapshot.selected,
     };
     notify();
+    return leaveResidue;
   });
   const read = vi.fn(async () => [
     {
@@ -136,6 +144,8 @@ function harness({
   });
   vi.stubGlobal("fetch", fetch);
   const onOpenTarget = vi.fn();
+  // The host's selection path: selects through the service, then navigates.
+  const onSelect = vi.fn((id: string | null) => select(id));
   return {
     communities,
     select,
@@ -144,6 +154,7 @@ function harness({
     fetch,
     markAllChannelsRead,
     onOpenTarget,
+    onSelect,
     leaveRequests: () =>
       fetch.mock.calls
         .map(([url]) => String(url))
@@ -547,12 +558,61 @@ it("leaves an inactive community after confirming: the relay releases it before 
   expect(sessionRequests(h.fetch)).toEqual([]);
   expect(h.read).not.toHaveBeenCalled();
   expect(h.select).not.toHaveBeenCalled();
+  expect(h.onSelect).not.toHaveBeenCalled();
   expect(button("Primary")).toHaveAttribute("aria-current", "true");
-  await waitFor(() =>
-    expect(
-      screen.getByRole("button", { name: "Personal space" }),
-    ).toHaveFocus(),
+  // Focus follows the selection, which stayed put; Personal space is only
+  // right when a left selection actually landed there.
+  await waitFor(() => expect(button("Primary")).toHaveFocus());
+  expect(
+    screen.getByRole("button", { name: "Personal space" }),
+  ).not.toHaveFocus();
+});
+
+it("leaving the selected community tells the host to select Personal space; an inactive one does not", async () => {
+  const user = userEvent.setup();
+  const h = harness();
+  render(<CommunityRail communities={h.communities} onSelect={h.onSelect} />);
+  let dialog = await askToLeave(user, "Primary");
+  await user.click(confirmLeave(dialog));
+  await screen.findByText("Left Primary.");
+  // The service owns the store state; the host adds the navigation and ingress
+  // recovery that clicking Personal space would, so a Settings card scoped to
+  // the gone community is not left open.
+  expect(h.leave).toHaveBeenCalledWith(primary);
+  expect(h.onSelect).toHaveBeenCalledTimes(1);
+  expect(h.onSelect).toHaveBeenCalledWith(null);
+  expect(h.leave.mock.invocationCallOrder[0]).toBeLessThan(
+    h.onSelect.mock.invocationCallOrder[0] ?? 0,
   );
+  const personal = screen.getByRole("button", { name: "Personal space" });
+  expect(personal).toHaveAttribute("aria-current", "true");
+  await waitFor(() => expect(personal).toHaveFocus());
+
+  h.update({ selected: secondary });
+  dialog = await askToLeave(user, "Secondary");
+  await user.click(confirmLeave(dialog));
+  await screen.findByText("Left Secondary.");
+  expect(h.onSelect).toHaveBeenCalledTimes(2);
+  expect(h.onSelect).toHaveBeenLastCalledWith(null);
+
+  // Leaving a community that is not selected changes nothing about selection.
+  h.update({
+    memberships: [
+      { id: primary, name: "Primary" },
+      { id: secondary, name: "Secondary" },
+    ],
+    selected: primary,
+  });
+  dialog = await askToLeave(user, "Secondary");
+  await user.click(confirmLeave(dialog));
+  // The earlier "Left Secondary." toast is still showing, so wait on the
+  // leave itself rather than on a second copy of the same text.
+  await waitFor(() => expect(h.leave).toHaveBeenCalledTimes(3));
+  await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+  expect(await screen.findAllByText("Left Secondary.")).toHaveLength(2);
+  expect(h.onSelect).toHaveBeenCalledTimes(2);
+  expect(button("Primary")).toHaveAttribute("aria-current", "true");
+  await waitFor(() => expect(button("Primary")).toHaveFocus());
 });
 
 it("cancelling the confirmation keeps the membership and returns focus to the community", async () => {
@@ -628,28 +688,87 @@ it.each([
   },
 );
 
+const absent =
+  "You were no longer a member of Secondary, so it was removed from this device.";
 it.each([
-  "invalid: you are not a relay member",
-  "invalid: relay membership is not enabled",
-])("forgets a community whose relay answers %j and says so", async (error) => {
+  { error: "invalid: you are not a relay member", toast: absent },
+  { error: "invalid: relay membership is not enabled", toast: absent },
+  {
+    // The relay refuses a banned identity before any leave handler runs, so
+    // there is nothing a retry could achieve: access is already severed.
+    error: "blocked: you are banned from this community",
+    toast:
+      "Your access to Secondary was revoked, so it was removed from this device.",
+  },
+])(
+  "forgets a community whose relay answers $error and says so",
+  async ({ error, toast }) => {
+    const user = userEvent.setup();
+    const h = harness({
+      leaveResponse: () => Response.json({ error }, { status: 400 }),
+    });
+    render(<CommunityRail communities={h.communities} />);
+    const dialog = await askToLeave(user, "Secondary");
+    await user.click(confirmLeave(dialog));
+    const notice = await screen.findByText(toast);
+    expect(notice.closest(".buzz-toast")).not.toBeNull();
+    expect(notice.closest(".buzz-toast")).toHaveAttribute("data-type", "info");
+    expect(h.leave).toHaveBeenCalledWith(secondary);
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Switch to Secondary" }),
+      ).toBeNull(),
+    );
+    expect(sessionRequests(h.fetch)).toEqual([]);
+  },
+);
+
+it("reports a device that could not finish forgetting a left community without blaming the connection", async () => {
   const user = userEvent.setup();
   const h = harness({
-    leaveResponse: () => Response.json({ error }, { status: 400 }),
+    leaveError: new Error(
+      "Could not save this community on this device. Try again.",
+    ),
+  });
+  render(<CommunityRail communities={h.communities} onSelect={h.onSelect} />);
+  const dialog = await askToLeave(user, "Secondary");
+  await user.click(confirmLeave(dialog));
+  const notice = await screen.findByText(
+    "Left Secondary, but this device couldn’t finish cleaning up. Leave it again to finish.",
+  );
+  expect(notice.closest(".buzz-toast")).toHaveAttribute("data-type", "error");
+  expect(
+    screen.queryByText(
+      "Couldn’t leave Secondary. Check your connection and try again.",
+    ),
+  ).toBeNull();
+  // The relay released the membership; only the device record failed, so the
+  // community stays in the rail for the retry that reaches the absent path.
+  expect(h.leaveRequests()).toHaveLength(1);
+  expect(h.leave).toHaveBeenCalledWith(secondary);
+  expect(h.onSelect).not.toHaveBeenCalled();
+  await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+  expect(button("Secondary")).toBeInTheDocument();
+  await waitFor(() => expect(button("Secondary")).toHaveFocus());
+});
+
+it("says when some saved data outlived the purge", async () => {
+  const user = userEvent.setup();
+  const h = harness({
+    leaveResidue: [{ store: "outbox", error: new Error("blocked") }],
   });
   render(<CommunityRail communities={h.communities} />);
   const dialog = await askToLeave(user, "Secondary");
   await user.click(confirmLeave(dialog));
   const notice = await screen.findByText(
-    "You were no longer a member of Secondary, so it was removed from this device.",
+    "Left Secondary. Some saved data couldn’t be cleared.",
   );
-  expect(notice.closest(".buzz-toast")).not.toBeNull();
-  expect(h.leave).toHaveBeenCalledWith(secondary);
+  expect(notice.closest(".buzz-toast")).toHaveAttribute("data-type", "success");
   await waitFor(() =>
     expect(
       screen.queryByRole("button", { name: "Switch to Secondary" }),
     ).toBeNull(),
   );
-  expect(sessionRequests(h.fetch)).toEqual([]);
 });
 
 it("shows the leave in flight on the dialog and the menu item until the relay answers", async () => {

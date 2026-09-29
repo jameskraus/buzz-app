@@ -222,6 +222,12 @@ it("signs the NIP-43 leave request for the community and classifies the relay's 
     respond = () => ({ status: 400, body: { error } });
     await expect(requestLeave(community)).resolves.toBe("already-absent");
   }
+  // A ban is refused at authentication, so no retry could ever succeed.
+  respond = () => ({
+    status: 400,
+    body: { error: "blocked: you are banned from this community" },
+  });
+  await expect(requestLeave(community)).resolves.toBe("access-revoked");
   respond = () => ({
     status: 400,
     body: { error: "invalid: relay owner cannot leave" },

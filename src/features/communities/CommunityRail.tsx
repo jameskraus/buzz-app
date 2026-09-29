@@ -7,7 +7,7 @@ import { useToastNotification } from "../../shared/design-system/ui/Toast";
 import type { OpenTarget } from "../navigation/targets";
 import { communityFromScope } from "../relay/gifs";
 import { useRelayConnection } from "../relay/react";
-import { inviteMintingAvailable, requestLeave } from "./api";
+import { inviteMintingAvailable, requestLeave, type LeaveOutcome } from "./api";
 import type { Communities, Membership } from "./service";
 import { CommunityDialog } from "./CommunityDialog";
 import { CommunityRailItem } from "./CommunityRailItem";
@@ -43,19 +43,24 @@ export function CommunityRail({
   const personalRef = useRef<HTMLButtonElement>(null);
   const buttons = useRef(new Map<string, HTMLElement>());
   const wasLeaving = useRef<Membership | null>(null);
-  useEffect(() => {
-    // Focus returns to the community when it is still saved (cancel or failure),
-    // otherwise to Personal space, where a left selection now lands.
-    const previous = wasLeaving.current;
-    if (previous && !leaving)
-      (buttons.current.get(previous.id) ?? personalRef.current)?.focus();
-    wasLeaving.current = leaving?.membership ?? null;
-  }, [leaving]);
   const notify = useToastNotification();
   const client = useSyncExternalStore(
     communities.subscribe,
     communities.snapshot,
   );
+  useEffect(() => {
+    // Focus returns to the community when it is still saved (cancel or
+    // failure). Once it is gone, focus follows the selection: the community
+    // still selected, or Personal space where a left selection now lands.
+    const previous = wasLeaving.current;
+    if (previous && !leaving)
+      (
+        buttons.current.get(previous.id) ??
+        (client.selected ? buttons.current.get(client.selected) : undefined) ??
+        personalRef.current
+      )?.focus();
+    wasLeaving.current = leaving?.membership ?? null;
+  }, [leaving, client.selected]);
   // The compatibility reader follows selection, so this is only ever the
   // selected community's session; inactive communities stay unacquired.
   const connection = useRelayConnection(communities.relay);
@@ -111,23 +116,42 @@ export function CommunityRail({
     else communities.select(id);
   };
   /** Publish first; the device forgets the community only once the relay has
-   * released the membership or reports it never held one. Anything else keeps
-   * the membership and the menu item for a retry. */
+   * released the membership, reports it never held one, or has revoked the
+   * viewer's access. Anything else keeps the membership and the menu item for
+   * a retry. */
   const leave = async () => {
     if (!leaving || leaving.pending) return;
     const { membership } = leaving;
     setLeaving({ membership, pending: true });
+    let outcome: LeaveOutcome;
     try {
-      const outcome = await requestLeave(membership.id);
-      await communities.leave(membership.id);
-      if (outcome === "already-absent")
-        notify(
-          `You were no longer a member of ${membership.name}, so it was removed from this device.`,
-          "info",
-        );
-      else notify(`Left ${membership.name}.`, "success");
+      outcome = await requestLeave(membership.id);
     } catch (error) {
       notify(leaveFailureText(membership.name, error), "error");
+      setLeaving(null);
+      return;
+    }
+    // From here the relay holds no membership to go back to; only this device
+    // can still fail, and its failures read differently from a lost connection.
+    const wasSelected = communities.snapshot().selected === membership.id;
+    try {
+      const residue = await communities.leave(membership.id);
+      // The service already fell back to Personal space. Telling the host too
+      // gives the leave the same navigation and ingress recovery as clicking
+      // Personal space, instead of leaving a page scoped to a gone community.
+      if (wasSelected) onSelect?.(null);
+      notify(
+        leftText(membership.name, outcome, residue.length > 0),
+        outcome === "left" ? "success" : "info",
+      );
+    } catch {
+      // Only the device record failed to save, before anything changed: the
+      // community is still in the rail, and leaving it again reaches the
+      // already-absent path.
+      notify(
+        `Left ${membership.name}, but this device couldn’t finish cleaning up. Leave it again to finish.`,
+        "error",
+      );
     } finally {
       setLeaving(null);
     }
@@ -222,13 +246,22 @@ export function CommunityRail({
   );
 }
 
+/** What the relay settled, plus whether any saved data outlived the purge. */
+function leftText(name: string, outcome: LeaveOutcome, residue: boolean) {
+  const settled =
+    outcome === "already-absent"
+      ? `You were no longer a member of ${name}, so it was removed from this device.`
+      : outcome === "access-revoked"
+        ? `Your access to ${name} was revoked, so it was removed from this device.`
+        : `Left ${name}.`;
+  return residue ? `${settled} Some saved data couldn’t be cleared.` : settled;
+}
+
 /** Relay-authored refusals the viewer can act on read verbatim-ish; everything
  * else, including timeouts and unreachable relays, keeps one retry message. */
 function leaveFailureText(name: string, error: unknown) {
   const reason = error instanceof Error ? error.message : "";
   if (reason === "invalid: relay owner cannot leave")
     return `The relay owner can’t leave ${name}.`;
-  if (reason === "blocked: you are banned from this community")
-    return `${name} has blocked this identity, so the leave request was refused.`;
   return `Couldn’t leave ${name}. Check your connection and try again.`;
 }

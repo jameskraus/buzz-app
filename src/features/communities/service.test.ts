@@ -4,6 +4,7 @@ import { createCommunities } from "./service";
 import { communityDestination } from "./destination";
 import * as destinations from "./destination";
 import { flush } from "../relay/testing";
+import { recordReaction } from "../messages/quick-reactions";
 import { readView, writeView } from "../../shared/view-state";
 
 const viewer = "a".repeat(64);
@@ -529,7 +530,8 @@ it("leave forgets the selected community: Personal space, a disposed session and
   writeView(secondaryScope, "draft:general", "kept");
   const sessions = () => requests.filter((url) => url.endsWith("/session"));
   const before = sessions().length;
-  await client.leave("primary");
+  // Every store cleared, so there is nothing to report.
+  expect(await client.leave("primary")).toEqual([]);
   expect(client.snapshot()).toMatchObject({
     selected: null,
     memberships: [{ id: "secondary", name: "Secondary" }],
@@ -579,9 +581,46 @@ it("leave of an inactive community keeps the selection and its session; unknown 
   expect(client.relay.snapshot()).toBe(active);
   const state = client.snapshot();
   const persisted = localStorage.getItem(`buzz-client.v1:${viewer}`);
-  await client.leave("https://unknown.example");
+  expect(await client.leave("https://unknown.example")).toEqual([]);
   expect(client.snapshot()).toBe(state);
   expect(localStorage.getItem(`buzz-client.v1:${viewer}`)).toBe(persisted);
+});
+
+it("leave still forgets the community when a store will not clear, and logs and returns what remained", async () => {
+  const client = setup();
+  await flush();
+  client.joined(
+    { id: "primary", name: "Primary" },
+    { name: "Local", picture: "" },
+  );
+  await flush();
+  const origin = communityDestination("primary").url;
+  recordReaction(`${origin}:${viewer}`, "🎉");
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  // Key enumeration is what the view and channel-setup sweeps rely on.
+  const denied = new Error("denied");
+  vi.spyOn(localStorage, "key").mockImplementation(() => {
+    throw denied;
+  });
+  const failures = await client.leave("primary");
+  expect(client.snapshot()).toMatchObject({ selected: null, memberships: [] });
+  expect(client.relay.snapshot().status).toBe("disconnected");
+  // The stores that could be cleared were; the rest are named for the caller.
+  expect(
+    localStorage.getItem(`buzz.quick-reactions.v1:${origin}:${viewer}`),
+  ).toBeNull();
+  expect(failures).toEqual([
+    { store: "view state", error: denied },
+    { store: "channel setups", error: denied },
+  ]);
+  expect(warn).toHaveBeenCalledWith(
+    `Couldn't clear view state for ${origin} on this device`,
+    denied,
+  );
+  expect(warn).toHaveBeenCalledWith(
+    `Couldn't clear channel setups for ${origin} on this device`,
+    denied,
+  );
 });
 
 it("leaving the last community lands on Personal space with an empty saved record", async () => {

@@ -77,11 +77,17 @@ owns or administers the selected community and this build can mint invites. Copy
 Community settings and Leave work on inactive communities without opening their
 sessions. Leave asks for confirmation, then sends a signed NIP-43 leave request
 (kind 28936) to that community's relay before the device forgets it: the relay
-accepting, or answering that the viewer is not a member, removes the community
-here and clears its drafts, reading positions and other device state; any other
-refusal or an unreachable relay keeps the membership and reports the failure so
-Leave can be tried again. A left community that was selected lands on Personal
-space. Messages shows an intentional
+accepting, answering that the viewer is not a member, or answering that the
+viewer is banned (access is already severed, so no retry could do more) removes
+the community here and clears its drafts, reading positions and other device
+state; any other refusal or an unreachable relay keeps the membership and
+reports the failure so Leave can be tried again. Once the relay has answered,
+only this device can still fail: a device record that will not save keeps the
+community in the rail and says so, and leaving it again finishes through the
+not-a-member answer; a store that will not clear is logged by name and the
+success notice says some saved data remains. A left community that was selected
+lands on Personal space through the host's selection path, exactly as clicking
+Personal space would. Messages shows an intentional
 empty state there. Try drafting in A, switching to B, then returning to A.
 Selected channels, drafts and reading offsets are partitioned by the canonical
 community origin and viewer; channel IDs alone are not sufficient keys.
@@ -199,12 +205,16 @@ backup; same-origin plugin JavaScript is trusted and can invoke that IPC too.
 `src/features/communities/service.test.ts` covers no-community initialization,
 local profiles, scoped view intent, session retention, selective restoration and
 leaving (membership removal, Personal space fallback, session disposal, purged
-device state and the last community). `CommunityRail.test.tsx` covers the leave
-flow end to end against the broker route: confirm, publish, then remove; cancel;
-refusals and timeouts that keep the membership; the already-absent answer; the
-in-flight state; and that no inactive session is acquired. `device-state.test.ts`
-covers the per-origin purge. The broker and native adapter tests sign the exact
-leave shape and pass through only the relay's known refusals.
+device state, the last community and a purge that leaves named failures).
+`CommunityRail.test.tsx` covers the leave flow end to end against the broker
+route: confirm, publish, then remove; cancel; refusals and timeouts that keep the
+membership; the not-a-member and banned answers; a device record that will not
+save after the relay answered; residual saved data; the host selection of
+Personal space for a left selection; focus placement; the in-flight state; and
+that no inactive session is acquired. `device-state.test.ts` covers the
+per-origin purge and its per-store failure report. The broker and native adapter
+tests sign the exact leave shape and pass through only the relay's known
+refusals.
 `broker.test.ts` runs real localhost HTTP with signed fixture events to verify
 multi-community routing, profile publication, invite claims, and a captured send
 after opening another community. `destination.test.ts` checks normalization and

@@ -132,11 +132,19 @@ dialog owned by the rail (“Leave <name>?”) whose destructive confirm shows a
 pending state while the request runs; the menu item itself is disabled and reads
 “Leaving…” for that community until the relay answers. The rail publishes the
 NIP-43 leave request to the community's relay by origin, then asks the
-communities service to forget it; the relay's acceptance or its "not a member"
-answer removes the community and reports through the toast stack, while any
-other failure keeps the membership and reports the reason. Focus returns to the
-community when it is still saved and to Personal space once it is gone. Closing
-a menu opened from the keyboard returns focus to
+communities service to forget it; the relay's acceptance, its "not a member"
+answer or its banned answer removes the community and reports through the toast
+stack, while any other refusal or an unreachable relay keeps the membership and
+reports the reason. A failure after the relay has answered is the device's own
+and reads that way: the community was left but this device could not finish
+cleaning up, and leaving it again finishes. Saved data the purge could not clear
+is logged by store and adds a line to the success notice. When the left
+community was selected, the rail routes the fallback to Personal space through
+the host's selection callback so navigation and ingress recovery match a click
+on Personal space, rather than leaving a page scoped to a gone community. Focus
+returns to the community when it is still saved; once it is gone, focus follows
+the selection, to the still-selected community or to Personal space where a
+left selection now lands. Closing a menu opened from the keyboard returns focus to
 that community; closing one opened by pointer restores whatever had focus
 before, so a right-click while typing does not move the caret to the rail.
 Opening a menu or running any item never acquires an inactive session, and the
