@@ -273,3 +273,45 @@ it("removes previously allowed actions when the replacement permission read fail
   expect(screen.queryByRole("button", { name: "Delete channel" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Leave channel" })).toBeNull();
 });
+
+it.each([true, false])(
+  "Delete outage preserves available Archive=%s and Leave, then retries",
+  async (canArchive) => {
+    const lifecycle = capability();
+    const choose = vi.fn();
+    lifecycle.load.mockResolvedValueOnce({
+      ...settings,
+      canArchive,
+      deleteUnavailable: true,
+    });
+    render(
+      <ChannelLifecycleActions
+        channelId={settings.channelId}
+        lifecycle={lifecycle}
+        choose={choose}
+      />,
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Delete check unavailable",
+    );
+    expect(screen.getByRole("button", { name: "Leave channel" })).toBeEnabled();
+    expect(!!screen.queryByRole("button", { name: "Archive channel" })).toBe(
+      canArchive,
+    );
+    expect(screen.queryByRole("button", { name: "Delete channel" })).toBeNull();
+    lifecycle.load.mockResolvedValue({
+      ...settings,
+      canArchive,
+      canDelete: true,
+    });
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Retry Delete check" }));
+    expect(
+      await screen.findByRole("button", { name: "Delete channel" }),
+    ).toBeEnabled();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(choose).not.toHaveBeenCalled();
+    expect(lifecycle.run).not.toHaveBeenCalled();
+  },
+);

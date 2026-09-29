@@ -72,6 +72,14 @@ export function ChannelLifecycleActions({
           Archive channel
         </Button>
       )}
+      {state.permissions?.deleteUnavailable && (
+        <div>
+          <p role="status">Delete check unavailable</p>
+          <Button onClick={() => setRetry((value) => value + 1)}>
+            Retry Delete check
+          </Button>
+        </div>
+      )}
       {state.permissions?.canDelete && (
         <Button
           variant="destructive"

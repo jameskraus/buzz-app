@@ -146,11 +146,11 @@ for (const action of ["archive", "delete"]) {
   });
 }
 
-// Production composition must apply the same direct-owner gate in both surfaces.
+// Production composition must apply owner-agent eligibility in both surfaces.
 // Profile/role permutations and signing races stay in the lifecycle unit tests.
 test.describe("owner-role agent without direct ownership", () => {
   test.use({ lifecycleRole: "admin", lifecycleOwnerAgent: true });
-  test("omits Delete in both surfaces while preserving Archive and Leave", async ({
+  test("offers Delete in both surfaces, retains a rejected channel, then confirms removal", async ({
     page,
     app,
   }) => {
@@ -184,8 +184,17 @@ test.describe("owner-role agent without direct ownership", () => {
     ).toBeVisible();
     await expect(
       menu.getByRole("menuitem", { name: "Delete channel", exact: true }),
-    ).toHaveCount(0);
-    await expect(menu.getByText(/Delete permissions/)).toHaveCount(0);
+    ).toBeVisible();
+    await menu
+      .getByRole("menuitem", { name: "Delete channel", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", {
+      name: "Delete channel: Lifecycle channel",
+      exact: true,
+    });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(row).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(menu).toHaveCount(0);
     await page
@@ -200,9 +209,57 @@ test.describe("owner-role agent without direct ownership", () => {
     ).toBeVisible();
     await expect(
       panel.getByRole("button", { name: "Delete channel", exact: true }),
-    ).toHaveCount(0);
-    await expect(panel.getByText(/Delete permissions/)).toHaveCount(0);
+    ).toBeVisible();
+    const trigger = panel.getByRole("button", {
+      name: "Delete channel",
+      exact: true,
+    });
+    await trigger.click();
+    // A signed profile and the relay's persisted ownership may disagree. Model
+    // the exact negative delivery receipt at the host boundary, not a UI error.
+    await page.route(
+      "**/api/relay/**/channel-lifecycle-publish",
+      async (route) => {
+        const event = route.request().postDataJSON();
+        expect(event.kind).toBe(9008);
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            accepted: false,
+            event_id: event.id,
+            message: "Only the channel owner can delete",
+          }),
+        });
+      },
+      { times: 1 },
+    );
+    await dialog
+      .getByRole("button", { name: "Delete channel", exact: true })
+      .click();
+    await expect(dialog.getByRole("alert")).toHaveText(
+      "Only the channel owner can delete",
+    );
+    await expect(row).toBeVisible();
+    await expect(
+      dialog.getByRole("button", { name: "Delete channel", exact: true }),
+    ).toBeEnabled();
     expect(app.report.lifecyclePublications ?? []).toHaveLength(0);
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(trigger).toBeFocused();
+    await trigger.click();
+    await dialog
+      .getByRole("button", { name: "Delete channel", exact: true })
+      .click();
+    await expect(dialog).toHaveCount(0);
+    await expect(panel).toHaveCount(0);
+    await expect(row).toHaveCount(0);
+    await expect(
+      page.getByRole("textbox", { name: "Message #Alpha", exact: true }),
+    ).toBeVisible();
+    expect(app.report.lifecyclePublications.map((event) => event.kind)).toEqual(
+      [9008],
+    );
     expect(app.report.unexpected).toEqual([]);
   });
 });

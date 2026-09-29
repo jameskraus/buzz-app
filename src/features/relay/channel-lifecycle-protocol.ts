@@ -83,6 +83,7 @@ export type ChannelLifecycleSettings = Readonly<{
   channelType: "stream" | "forum" | "dm";
   canArchive: boolean;
   canDelete: boolean;
+  deleteUnavailable?: boolean;
   canLeave: boolean;
   canHide: boolean;
   leaveReason?: string;

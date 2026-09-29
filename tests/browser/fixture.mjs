@@ -9,7 +9,9 @@ import {
   verifyEvent,
 } from "nostr-tools";
 import { writeFile } from "node:fs/promises";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
+import { schnorr } from "@noble/curves/secp256k1.js";
+import { bytesToHex } from "nostr-tools/utils";
 import { platform, arch } from "node:os";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
@@ -169,7 +171,26 @@ export const test = base.extend({
     const ownerAgentKey = lifecycleOwnerAgent ? generateSecretKey() : undefined;
     const ownerAgent = ownerAgentKey ? getPublicKey(ownerAgentKey) : undefined;
     const ownerAgentProfile = ownerAgentKey
-      ? sign(0, [], JSON.stringify({ name: "Channel agent" }), ownerAgentKey)
+      ? sign(
+          0,
+          [
+            [
+              "auth",
+              viewer,
+              "",
+              bytesToHex(
+                schnorr.sign(
+                  createHash("sha256")
+                    .update(`nostr:agent-auth:${ownerAgent}:`)
+                    .digest(),
+                  userKey,
+                ),
+              ),
+            ],
+          ],
+          JSON.stringify({ name: "Owner Agent", is_agent: true }),
+          ownerAgentKey,
+        )
       : undefined;
     const participants = largeSidebar
       ? Array.from({ length: 1001 }, (_, i) =>
