@@ -63,21 +63,3 @@ export async function selectSettingsSection(page, name) {
     .click();
   await expect(page.getByRole("region", { name, exact: true })).toBeVisible();
 }
-
-// Channels placeholder routes have no sidebar row, so open them by address in
-// the current entry's scope, as a deep link would.
-export async function openChannelPlaceholder(page, params) {
-  await page.evaluate((params) => {
-    const { scope } = history.state.buzzNavigationV1.entry.target;
-    location.hash = `#buzz=${encodeURIComponent(
-      JSON.stringify({
-        version: 1,
-        kind: "page",
-        pluginId: "buzz.channels",
-        pageId: "channels",
-        scope,
-        route: { version: 1, params },
-      }),
-    )}`;
-  }, params);
-}

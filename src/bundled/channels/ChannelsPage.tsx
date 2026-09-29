@@ -2,10 +2,7 @@ import type { AgentControl } from "../../features/agents/control";
 import { useChannelNavigation } from "../../features/channel-navigation/ChannelNavigationState";
 import { clientMetrics } from "../../features/developer/client-metrics";
 import { ChannelMembersButton } from "./ChannelMembersDialog";
-import {
-  channelPlaceholder,
-  newSessionParent,
-} from "../../features/channel-navigation/routes";
+import { newSessionParent } from "../../features/channel-navigation/routes";
 import { personalGroups } from "../../features/channel-templates/setup";
 import type { TemplateProviders } from "../../features/channel-templates/provider";
 import { OwnedContribution } from "../../plugins/OwnedContribution";
@@ -190,10 +187,6 @@ function ChannelWorkspace({
   const composingMessage =
     navigation?.target.kind === "page" &&
     navigation.target.route?.params === "new-message";
-  const placeholder =
-    navigation?.target.kind === "page"
-      ? channelPlaceholder(navigation.target.route?.params)
-      : undefined;
   const list = useChannelList(queries.channels);
   const preferences = useSidebarPreferences(queries.sidebarPreferences);
   const kitState = useSyncExternalStore(
@@ -358,7 +351,7 @@ function ChannelWorkspace({
   const CurrentChannelIcon = channelIcon(current);
   useEffect(() => {
     if (navigation?.signal.aborted) return;
-    if (composingMessage || placeholder) {
+    if (composingMessage) {
       navigation?.complete({ status: "opened" });
       return;
     }
@@ -387,7 +380,6 @@ function ChannelWorkspace({
   }, [
     cached,
     composingMessage,
-    placeholder,
     requestedChannel,
     resolving,
     current,
@@ -557,7 +549,7 @@ function ChannelWorkspace({
     setOpened(next);
   }, []);
   useLayoutEffect(() => {
-    if (draftParent || composingMessage || placeholder || requestedMessage) {
+    if (draftParent || composingMessage || requestedMessage) {
       setThread(undefined);
       open(undefined);
     }
@@ -573,7 +565,6 @@ function ChannelWorkspace({
   }, [
     draftParent,
     composingMessage,
-    placeholder,
     requestedMessage,
     requestedChannel,
     requestedThread,
@@ -843,7 +834,7 @@ function ChannelWorkspace({
       : undefined;
   const drawerContext = useMemo(
     () =>
-      current && !current.readOnly && viewer && !placeholder
+      current && !current.readOnly && viewer
         ? {
             scope,
             viewer,
@@ -856,7 +847,7 @@ function ChannelWorkspace({
             ...(showingThread && { threadId: showingThread.messageId }),
           }
         : undefined,
-    [scope, viewer, current, showingThread, placeholder],
+    [scope, viewer, current, showingThread],
   );
   const drawer = useChannelPanels(panels, drawerContext, () =>
     setSettings(undefined),
@@ -900,13 +891,6 @@ function ChannelWorkspace({
                 select(channelId);
               }}
             />
-          ) : placeholder ? (
-            <>
-              <PanelHeader title={placeholder} />
-              <div className={styles.placeholder}>
-                <p>Content coming soon</p>
-              </div>
-            </>
           ) : drafting && current ? (
             <NewSessionView parentName={current.name}>
               <NewSessionComposer

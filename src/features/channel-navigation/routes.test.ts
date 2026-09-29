@@ -14,6 +14,9 @@ it("rejects missing parents, foreign route kinds and draft payloads", () => {
     null,
     [],
     "new-session",
+    // Inbox and Bestie are pages of their own, not Channels placeholders.
+    "Inbox",
+    "Bestie",
     {},
     { kind: "new-session" },
     { kind: "new-session", parentId: " " },

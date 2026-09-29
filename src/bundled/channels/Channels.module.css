@@ -114,15 +114,6 @@
   flex: 0 0 18px;
   place-items: center;
 }
-.placeholder {
-  display: grid;
-  flex: 1;
-  place-items: center;
-  color: var(--text-subtle);
-  font-size: var(--text-body-sm);
-  line-height: var(--text-body-sm--line-height);
-  letter-spacing: var(--text-body-sm--letter-spacing);
-}
 .channelListFrame {
   position: relative;
   width: calc(100% + 4px);

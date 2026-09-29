@@ -1,6 +1,5 @@
 import { test, expect } from "./fixture.mjs";
 import { open } from "./timeline.mjs";
-import { openChannelPlaceholder } from "./navigation.mjs";
 
 test.use({ savedSidebar: true });
 
@@ -63,9 +62,13 @@ test("compact sidenav keeps its geometry across persistent page navigation", asy
     exact: true,
   });
   const pages = panel.getByRole("navigation", { name: "Pages" });
-  const destinations = ["Projects", "Agents", "Workflows"].map((name) =>
-    pages.getByRole("button", { name, exact: true }),
-  );
+  const destinations = [
+    "Inbox",
+    "Bestie",
+    "Projects",
+    "Agents",
+    "Workflows",
+  ].map((name) => pages.getByRole("button", { name, exact: true }));
   const assertDestinationFillParity = async () => {
     const geometry = await Promise.all(
       destinations.map((destination) =>
@@ -263,65 +266,71 @@ test("section disclosure toggles content and honors reduced motion", async ({
 });
 
 // A real grid/overlay measurement is needed: DOM presence misses implicit columns.
-test("placeholder destinations retain companion layout across navigation and resize", async ({
+// Inbox and Bestie leave companion placement to the shell frame, unlike Messages.
+test("Inbox and Bestie pages retain companion layout across navigation and resize", async ({
   page,
   app,
 }) => {
   await open(page, app);
   const sidebar = page.getByRole("navigation", { name: "Subscribed channels" });
+  const pages = page
+    .getByRole("complementary", { name: "Channel sidebar", exact: true })
+    .getByRole("navigation", { name: "Pages" });
   const launcher = page.locator('.shell-header button[aria-label="Bestie"]');
   const companion = page.getByRole("complementary", {
     name: "Bestie",
     exact: true,
   });
-  const conversation = page.getByRole("article", {
-    name: "Conversation",
-    exact: true,
-  });
-  const checkGeometry = async (overlay) => {
+  const checkGeometry = async (body, overlay) => {
     await expect(companion).toBeVisible();
     await expect
       .poll(async () => {
         const card = await companion.boundingBox();
-        const body = await conversation.boundingBox();
-        if (!card || !body) return false;
+        const bounds = await body.boundingBox();
+        if (!card || !bounds) return false;
         return overlay
-          ? Math.abs(card.x + card.width - body.x - body.width) < 2 &&
-              card.x < body.x + body.width
-          : card.x >= body.x + body.width;
+          ? Math.abs(card.x + card.width - bounds.x - bounds.width) < 2 &&
+              card.x < bounds.x + bounds.width
+          : card.x >= bounds.x + bounds.width;
       })
       .toBe(true);
     await expect
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
       .toBe(page.viewportSize().width);
   };
-  const selectChannel = async (name) => {
+  const showNavigation = async () => {
     const show = page.getByRole("button", {
       name: "Show navigation",
       exact: true,
     });
     if (await show.isVisible()) await show.click();
+  };
+  const selectChannel = async (name) => {
+    await showNavigation();
     await sidebar.getByRole("button", { name, exact: true }).click();
   };
-  const openPlaceholder = async (name) => {
-    await openChannelPlaceholder(page, name);
+  const openPage = async (name) => {
+    await showNavigation();
+    await pages.getByRole("button", { name, exact: true }).click();
+    const body = page.getByRole("region", { name, exact: true });
     await expect(
-      conversation.getByRole("heading", { name, exact: true }),
+      body.getByRole("heading", { name, exact: true }),
     ).toBeVisible();
+    return body;
   };
   for (const width of [1440, 900, 600]) {
     await page.setViewportSize({ width, height: 950 });
-    await openPlaceholder("Inbox");
+    let body = await openPage("Inbox");
     await launcher.click();
-    await checkGeometry(width <= 1000);
-    await openPlaceholder("Bestie");
-    await checkGeometry(width <= 1000);
+    await checkGeometry(body, width <= 1000);
+    body = await openPage("Bestie");
+    await checkGeometry(body, width <= 1000);
     await launcher.click();
     await expect(companion).not.toBeVisible();
     await selectChannel("Alpha");
     await launcher.click();
-    await openPlaceholder("Inbox");
-    await checkGeometry(width <= 1000);
+    body = await openPage("Inbox");
+    await checkGeometry(body, width <= 1000);
     await launcher.click();
   }
 });

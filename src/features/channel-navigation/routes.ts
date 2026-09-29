@@ -1,13 +1,5 @@
 import type { JsonValue } from "../navigation/targets";
 
-export type ChannelPlaceholder = "Inbox" | "Bestie";
-
-export function channelPlaceholder(
-  params: JsonValue | undefined,
-): ChannelPlaceholder | undefined {
-  return params === "Inbox" || params === "Bestie" ? params : undefined;
-}
-
 export function newSessionParent(
   params: JsonValue | undefined,
 ): string | undefined {
@@ -28,7 +20,6 @@ export function isChannelRoute(params: JsonValue) {
   return (
     params === "new-message" ||
     params === "empty" ||
-    channelPlaceholder(params) !== undefined ||
     newSessionParent(params) !== undefined
   );
 }

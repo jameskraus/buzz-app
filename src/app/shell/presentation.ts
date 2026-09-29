@@ -1,4 +1,6 @@
 import {
+  BellIcon,
+  BestieIcon,
   BrowserIcon,
   ChatsCircleIcon,
   FolderSimpleIcon,
@@ -17,11 +19,16 @@ export const shellPresentation = {
 
 // Navigation order is host policy, never plugin activation timing. Match full
 // contribution keys so an external page's local ID cannot claim a bundled slot.
+const bundledOrder = [
+  "buzz.channels/channels",
+  "buzz.inbox/inbox",
+  "buzz.bestie/bestie",
+  "buzz.projects/projects",
+];
 export function orderPages(pages: readonly RegisteredPage[]) {
   const rank = (page: RegisteredPage) => {
-    if (page.key === "buzz.channels/channels") return 0;
-    if (page.key === "buzz.projects/projects") return 1;
-    return 2;
+    const slot = bundledOrder.indexOf(page.key);
+    return slot === -1 ? bundledOrder.length : slot;
   };
   return [...pages].sort(
     (a, b) =>
@@ -34,18 +41,18 @@ export function orderPages(pages: readonly RegisteredPage[]) {
   );
 }
 
+const bundledIcons = new Map<string, typeof BrowserIcon>([
+  ["buzz.inbox/inbox", BellIcon],
+  ["buzz.bestie/bestie", BestieIcon],
+  ["buzz.projects/projects", FolderSimpleIcon],
+  ["buzz.agents/agents", RobotIcon],
+  ["buzz.workflows/workflows", LightningIcon],
+]);
 export function pagePresentation(page: RegisteredPage) {
   if (page.id === "channels") return shellPresentation.channels;
   return {
     label: page.title,
-    icon:
-      page.key === "buzz.projects/projects"
-        ? FolderSimpleIcon
-        : page.key === "buzz.agents/agents"
-          ? RobotIcon
-          : page.key === "buzz.workflows/workflows"
-            ? LightningIcon
-            : BrowserIcon,
+    icon: bundledIcons.get(page.key) ?? BrowserIcon,
     tone: page.layout === "workspace" ? "lime" : "sky",
   };
 }

@@ -26,6 +26,8 @@ import * as channels from "./channels";
 import * as github from "./github";
 import bestieManifest from "./bestie/manifest.json";
 import * as bestie from "./bestie";
+import inboxManifest from "./inbox/manifest.json";
+import * as inbox from "./inbox";
 import projectsManifest from "./projects/manifest.json";
 import * as projects from "./projects";
 import workflowsManifest from "./workflows/manifest.json";
@@ -63,6 +65,7 @@ export const bundledPlugins: readonly BundledPlugin[] = [
   { manifest: { ...channelsManifest, apiVersion: 1 }, module: channels },
   { manifest: { ...githubManifest, apiVersion: 1 }, module: github },
   { manifest: { ...bestieManifest, apiVersion: 1 }, module: bestie },
+  { manifest: { ...inboxManifest, apiVersion: 1 }, module: inbox },
   { manifest: { ...projectsManifest, apiVersion: 1 }, module: projects },
   { manifest: { ...agentsManifest, apiVersion: 1 }, module: agents },
   { manifest: { ...workflowsManifest, apiVersion: 1 }, module: workflows },

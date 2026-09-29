@@ -1,4 +1,5 @@
 import { defineIcon } from "./createDecorativeIcon";
+import { BestieMarkArtwork } from "./BestieMark";
 import { GitHubIssueArtwork } from "./GitHubIssue";
 import { OneDriveLogoArtwork } from "./OneDriveLogo";
 import { ArrowClockwiseIcon as PhosphorArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
@@ -242,6 +243,16 @@ export const GitHubIssueIcon = defineIcon("custom", GitHubIssueArtwork, {
   provenance:
     "Buzz-owned mark based on GitHub’s issue symbol and Phosphor Circle geometry.",
   intendedSizes: [{ width: 22, height: 22 }],
+});
+export const BestieIcon = defineIcon("custom", BestieMarkArtwork, {
+  meaning: "Bestie page",
+  category: "Product mark",
+  provenance:
+    "Buzz-owned Bestie artwork from public/bestie.png, framed as an SVG image for icon slots.",
+  intendedSizes: [
+    { width: 15, height: 15 },
+    { width: 17, height: 17 },
+  ],
 });
 
 import { CircleNotchIcon as PhosphorCircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch";

@@ -24,12 +24,14 @@ semantic tokens, UI authoring rules and the local component reference.
   styles live in Tailwind's base layer, so utilities can override them normally.
   Existing feature CSS variables remain available for incremental adoption.
 - `src/app/shell/presentation.ts` owns page labels, icons and navigation ordering.
-  Messages comes first, then Projects; other contributed pages follow by
-  displayed label with a full contribution-key tie-breaker. Sidebar navigation and
-  page search share this ordering, independent of plugin activation/re-enable order.
-  Sidebar navigation lists only pages registered with `primary: true` (Projects,
-  Agents and Workflows among the bundled plugins); page search lists every active
-  page. Channels and Sessions are vended without rows: Messages opens by default,
+  Messages comes first, then Inbox, Bestie and Projects; other contributed pages
+  follow by displayed label with a full contribution-key tie-breaker. Sidebar
+  navigation and page search share this ordering, independent of plugin
+  activation/re-enable order. Sidebar navigation lists only pages registered with
+  `primary: true` (Inbox, Bestie, Projects, Agents and Workflows among the bundled
+  plugins); page search lists every active page. Inbox and Bestie are placeholder
+  pages of their own plugins, so disabling Bestie removes its row along with its
+  launcher. Channels and Sessions are vended without rows: Messages opens by default,
   from any channel row and from search; Sessions opens from Messages and search.
   Channels is presented as Messages. Legacy tone props are retained for
   compatibility; all pages share the supplied gradient and repeating CSS dots.

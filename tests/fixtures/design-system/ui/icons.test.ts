@@ -12,7 +12,11 @@ it("derives the complete categorized inventory from the public gateway", () => {
   const phosphorNames = PHOSPHOR_ICONS.map(({ name }) => name);
   const customNames = CUSTOM_ICONS.map(({ name }) => name);
 
-  expect(customNames).toEqual(["GitHubIssueIcon", "OneDriveLogoIcon"]);
+  expect(customNames).toEqual([
+    "BestieIcon",
+    "GitHubIssueIcon",
+    "OneDriveLogoIcon",
+  ]);
   expect([...phosphorNames, ...customNames].sort()).toEqual(
     Object.keys(gatewayIcons).sort(),
   );
@@ -20,6 +24,14 @@ it("derives the complete categorized inventory from the public gateway", () => {
     [...phosphorNames].sort((a, b) => a.localeCompare(b)),
   );
   expect(CUSTOM_ICONS).toEqual([
+    expect.objectContaining({
+      name: "BestieIcon",
+      category: "Product mark",
+      intendedSizes: [
+        { width: 15, height: 15 },
+        { width: 17, height: 17 },
+      ],
+    }),
     expect.objectContaining({
       name: "GitHubIssueIcon",
       category: "Product mark",

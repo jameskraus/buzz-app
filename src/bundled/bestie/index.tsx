@@ -1,7 +1,16 @@
 import type { PluginModule } from "../../plugins/api";
+import { FullPageSurface } from "../../shared/design-system/ui/FullPageSurface";
+import { PanelHeader } from "../../shared/design-system/ui/PanelHeader";
 
-export const inject = ["panels"];
+export const inject = ["pages", "panels"];
 export const apply: PluginModule["apply"] = (ctx) => {
+  ctx.pages.register({
+    id: "bestie",
+    title: "Bestie",
+    layout: "workspace",
+    primary: true,
+    component: BestiePage,
+  });
   ctx.panels.register({
     id: "companion",
     title: "Bestie",
@@ -10,6 +19,22 @@ export const apply: PluginModule["apply"] = (ctx) => {
     component: Bestie,
   });
 };
+
+// Bestie's home page; the companion card shares its body until agent chat connects.
+function BestiePage() {
+  return (
+    <div className="h-full min-h-0">
+      <FullPageSurface aria-label="Bestie">
+        <div className="flex h-full min-h-0 flex-col">
+          <PanelHeader title="Bestie" />
+          <div className="min-h-0 flex-1 overflow-auto">
+            <Bestie />
+          </div>
+        </div>
+      </FullPageSurface>
+    </div>
+  );
+}
 
 function Bestie() {
   return (

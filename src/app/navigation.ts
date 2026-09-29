@@ -264,7 +264,6 @@ export function useAppNavigation(services: AppServices) {
               },
             }
           : { scope: null }),
-        route: { version: 1, params: "Inbox" },
       });
     },
     retry() {
