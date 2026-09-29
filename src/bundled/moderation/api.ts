@@ -1,10 +1,16 @@
-// Community membership (NIP-43 kind 13534) and owner/admin requests through the
-// development broker. Roles here only shape the UI; the relay decides every change.
-import type { EventData } from "../../features/relay/events";
+// Owner/admin requests through the development broker. Roles come from the
+// shared roster reader; the relay decides every change.
 import { communityRequest } from "../../features/communities/api";
+import type { Member, Role } from "../../features/communities/roster";
 
-export type Role = "owner" | "admin" | "member";
-export type Member = { pubkey: string; role: Role };
+export {
+  MEMBERSHIP_KIND,
+  membersFromSnapshot,
+  relayAuthor,
+  type Member,
+  type Role,
+} from "../../features/communities/roster";
+
 export type Invite = {
   code: string;
   url: string;
@@ -15,34 +21,6 @@ export type Invite = {
 export type MemberChange =
   | { action: "add" | "role"; pubkey: string; role: "admin" | "member" }
   | { action: "remove"; pubkey: string };
-
-export const MEMBERSHIP_KIND = 13534;
-const ROLES: readonly string[] = ["owner", "admin", "member"];
-
-/** Members from the relay-signed snapshot (`["member", pubkey, role]` tags). */
-export function membersFromSnapshot(
-  event: EventData,
-  relayAuthor: string,
-): Member[] {
-  if (event.kind !== MEMBERSHIP_KIND || event.pubkey !== relayAuthor)
-    throw new Error("Member list is not signed by this community");
-  const members = new Map<string, Member>();
-  for (const [name, pubkey, role] of event.tags) {
-    if (name !== "member" || !pubkey || !/^[0-9a-f]{64}$/.test(pubkey))
-      continue;
-    if (members.has(pubkey)) continue;
-    members.set(pubkey, {
-      pubkey,
-      role: role && ROLES.includes(role) ? (role as Role) : "member",
-    });
-  }
-  return [...members.values()];
-}
-
-/** The community's relay signing key, from the broker session contract. */
-export const relayAuthor = async (community: string) =>
-  (await communityRequest<{ relayAuthor: string }>(community, "session"))
-    .relayAuthor;
 
 export type Action = "promote" | "demote" | "remove";
 /** Actions the relay's permission matrix would allow `actor` to take on `target`. */

@@ -73,6 +73,11 @@ could hide unseen siblings. Oversized rows that never fit fully are not auto-rea
   this also covers messages at or before the cut that arrive later.
   With no message evidence, it clears only the channel's local mark and invents
   no frontier. Success means local durability; publication may still be pending.
+- `markAllChannelsRead()` runs `markChannelRead` one channel at a time over the
+  accessible listed channels that still show unread evidence or a local mark, so
+  an already-read community costs no writes. One failing channel does not stop
+  the sweep; the first failure is rethrown afterwards. The community rail's
+  Mark all as read uses it for the selected community only.
 - `markUnreadLocal(target)` is durable **on this browser profile/device only**.
   Automatic reading does not clear it. An explicit mark-through clears that
   target's local mark. `syncedManualUnread` is `false`.

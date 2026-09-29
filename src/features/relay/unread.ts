@@ -96,6 +96,11 @@ export interface UnreadCapability {
   enterChannel(channelId: string): Promise<void>;
   /** Explicit channel prefix through retained verified evidence, including replies. */
   markChannelRead(channelId: string): Promise<ReadMutationResult>;
+  /** `markChannelRead` serialised over every accessible listed channel that still
+   * shows unread evidence or a local mark. Channels with nothing to clear are
+   * skipped, so an already-read community costs no writes. One failing channel
+   * does not stop the rest; the first failure is rethrown after the sweep. */
+  markAllChannelsRead(): Promise<readonly ReadMutationResult[]>;
   markUnreadLocal(target: ReadTarget): Promise<ReadMutationResult>;
   clearUnreadLocal(target: ReadTarget): Promise<ReadMutationResult>;
   readonly syncedManualUnread: false;
@@ -1084,6 +1089,32 @@ export function createUnread({
           publish(new Set([channelId]));
         return result;
       });
+    },
+    async markAllChannelsRead() {
+      if (closed) throw new Error("Read target unavailable");
+      // Decide the sweep from the list at invocation; channels granted later wait
+      // for the next explicit action, like arrivals after a per-channel cut.
+      const pending = channels
+        .list()
+        .channels.filter((channel) => allowed(channel.id))
+        .map((channel) => channel.id)
+        .filter((channelId) => {
+          const current = compute({ kind: "channel", channelId });
+          return (current.observedCount ?? 0) > 0 || current.manual !== "none";
+        });
+      const results: ReadMutationResult[] = [];
+      let failure: unknown;
+      let failed = false;
+      for (const channelId of pending) {
+        try {
+          results.push(await capability.markChannelRead(channelId));
+        } catch (error) {
+          if (!failed) failure = error;
+          failed = true;
+        }
+      }
+      if (failed) throw failure;
+      return results;
     },
     async markUnreadLocal(target) {
       const key = targetKey(target);

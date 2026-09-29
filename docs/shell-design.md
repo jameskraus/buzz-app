@@ -114,7 +114,20 @@ The rail reads saved-community NIP-11 icons through the same-origin broker with 
 most two concurrent optional reads, including inactive communities without
 opening sessions; slow icon responses cannot occupy all foreground connections.
 Unavailable or unsupported images fall back to a saved icon or name initial.
-The rail does not acquire inactive sessions or claim an unread total: the unread
+Each saved community has a context menu (right-click, the ContextMenu key or
+Shift+F10, labelled “Actions for <name>”) built from the shared context-menu
+primitives, in the original's order: Mark all as read, then Copy community URL,
+Invite to community and Community settings. Copy writes the canonical HTTPS
+origin and reports through the host toast stack. Mark all as read acts only on
+the selected community's ready session and only while its read state can sync;
+elsewhere it stays visible but disabled with a note saying why. Invite to
+community appears only on the selected community, only when the relay-signed
+roster names the viewer an owner or admin (the same derivation the Invites
+settings card uses), and never in native builds, which cannot mint invites; it
+opens the Invites settings card scoped to that community. Community settings is
+on every community and opens Settings scoped to that community's origin, which
+selects it on the way. Opening a menu or running any item never acquires an
+inactive session, and the rail still claims no unread total: the unread
 capability provides bounded observed evidence, not exact community totals
 ([unread ownership](unread.md)).
 

@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { decode } from "nostr-tools/nip19";
 import { communityFromScope } from "../../features/relay/gifs";
 import { useRelayConnection } from "../../features/relay/react";
@@ -44,13 +38,11 @@ import {
   MenuTrigger,
 } from "../../shared/design-system/ui/Menu";
 import { SearchField } from "../../shared/design-system/ui/SearchField";
+import { useCommunityRole } from "../../features/communities/useCommunityRole";
 import {
   allowedActions,
   changeMember,
-  MEMBERSHIP_KIND,
-  membersFromSnapshot,
   mintInvite,
-  relayAuthor,
   type Action,
   type Member,
   type MemberChange,
@@ -120,54 +112,22 @@ function Members({
   viewer: string;
   active(): boolean;
 }) {
-  const [members, setMembers] = useState<Member[] | null>();
   const [error, setError] = useState("");
-  // A failed read never erases a confirmed write; it only marks the list stale.
-  const [readError, setReadError] = useState("");
   const [notice, setNotice] = useState("");
-  const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
   const [inviting, setInviting] = useState(false);
-  const reading = useRef<AbortController | null>(null);
   const profiles = useSyncExternalStore(
     session.profiles.subscribe,
     session.profiles.snapshot,
   );
-  /** Read-only roster refresh; the newest request wins and never rethrows. */
-  const refresh = useCallback(async () => {
-    reading.current?.abort();
-    const controller = new AbortController();
-    reading.current = controller;
-    const { signal } = controller;
-    setRefreshing(true);
-    try {
-      const author = await relayAuthor(community);
-      const events = await session.read(
-        [{ kinds: [MEMBERSHIP_KIND], authors: [author], limit: 1 }],
-        { fresh: true, signal },
-      );
-      const latest = [...events].sort((a, b) => b.created_at - a.created_at)[0];
-      const next = latest ? membersFromSnapshot(latest, author) : null;
-      if (signal.aborted) return;
-      setMembers(next);
-      setReadError("");
-      if (next) void session.profiles.ensure(next.map((m) => m.pubkey));
-    } catch (reason) {
-      if (signal.aborted) return;
-      setMembers((current) => current ?? null);
-      setReadError(`Could not load members: ${message(reason)}`);
-    } finally {
-      if (!signal.aborted) setRefreshing(false);
-    }
-  }, [session, community]);
+  // A failed read never erases a confirmed write; it only marks the list stale.
+  const { members, role, manager, readError, refreshing, refresh } =
+    useCommunityRole(session, community, viewer);
   useEffect(() => {
-    void refresh();
-    return () => reading.current?.abort();
-  }, [refresh]);
-  const role = members?.find((m) => m.pubkey === viewer)?.role;
-  const manager = role === "owner" || role === "admin";
+    if (members) void session.profiles.ensure(members.map((m) => m.pubkey));
+  }, [session, members]);
   const stale = !!readError;
   // No new command may start from a roster that is stale or being re-read.
   const locked = stale || refreshing;

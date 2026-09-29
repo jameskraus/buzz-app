@@ -141,6 +141,8 @@ function ConnectedApp({ services }: { services: AppServices }) {
             services.communities.select(id);
             if (!recovering) select("buzz.channels/channels");
           }}
+          // A scoped Settings target selects its community on the way.
+          onOpenTarget={(target) => void services.navigation.open(target)}
           communities={services.communities}
           accountActions={services.accountActions}
           searchServices={services}

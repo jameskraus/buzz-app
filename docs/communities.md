@@ -68,7 +68,13 @@ reporting success. This confirmation is not a transaction against other clients.
 Use the persistent left community rail to select a saved community or Personal
 space. Personal space
 clears selection without forgetting memberships. The rail’s Add control opens the
-existing join dialog; displaying saved communities reads relay metadata but does not open sessions for them. Messages shows an intentional
+existing join dialog; displaying saved communities reads relay metadata but does not open sessions for them.
+Right-click a saved community (or press the ContextMenu key or Shift+F10 on it)
+for Mark all as read, Copy community URL, Invite to community and Community
+settings. Only the selected community can be marked read, and only while its read
+state syncs; Invite shows only where the viewer owns or administers the selected
+community and this build can mint invites. Copy and Community settings work on
+inactive communities without opening their sessions. Messages shows an intentional
 empty state there. Try drafting in A, switching to B, then returning to A.
 Selected channels, drafts and reading offsets are partitioned by the canonical
 community origin and viewer; channel IDs alone are not sufficient keys.

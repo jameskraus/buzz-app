@@ -13,6 +13,9 @@ export type CommunityInfo = {
     age_attestation_required: boolean;
   } | null;
 };
+/** Invite minting is a broker-only route; the packaged native adapter has no
+ * `invite` allowlist entry, so surfaces offering invites hide themselves there. */
+export const inviteMintingAvailable = () => !nativeIdentityEnabled();
 export async function communityRequest<T>(
   id: string,
   route: string,

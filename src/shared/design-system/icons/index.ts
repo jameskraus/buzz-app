@@ -63,6 +63,10 @@ import { ChatsCircleIcon as PhosphorChatsCircleIcon } from "@phosphor-icons/reac
 export const ChatsCircleIcon = defineIcon("phosphor", PhosphorChatsCircleIcon);
 import { CheckIcon as PhosphorCheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 export const CheckIcon = defineIcon("phosphor", PhosphorCheckIcon);
+import { ChecksIcon as PhosphorChecksIcon } from "@phosphor-icons/react/dist/csr/Checks";
+export const ChecksIcon = defineIcon("phosphor", PhosphorChecksIcon);
+import { TicketIcon as PhosphorTicketIcon } from "@phosphor-icons/react/dist/csr/Ticket";
+export const TicketIcon = defineIcon("phosphor", PhosphorTicketIcon);
 import { CopyIcon as PhosphorCopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 export const CopyIcon = defineIcon("phosphor", PhosphorCopyIcon);
 import { CrownIcon as PhosphorCrownIcon } from "@phosphor-icons/react/dist/csr/Crown";

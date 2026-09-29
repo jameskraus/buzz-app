@@ -1466,6 +1466,54 @@ it("channel read atomically clears owned marks through the latest reply, preserv
   expect(h.session.channels.window("room").rows).toHaveLength(0);
 });
 
+it("mark all serialises channel reads over listed channels, skips read ones and finishes the sweep past a failure", async () => {
+  const h = setup();
+  h.grant("room");
+  h.grant("other");
+  h.grant("quiet");
+  h.emit([
+    message(h.alice, "room", "one", 11),
+    message(h.alice, "other", "two", 12),
+  ]);
+  const unread = h.session.unread;
+  const results = await unread.markAllChannelsRead();
+  expect(results).toHaveLength(2);
+  expect(results.every((result) => result.durability === "saved")).toBe(true);
+  // "quiet" had nothing to clear, so it earned neither a frontier nor a write.
+  expect(h.journal()?.state.frontiers).toEqual({ room: 11, other: 12 });
+
+  // Nothing left to clear: the sweep costs no storage revision.
+  const revision = h.journal()?.revision;
+  expect(await unread.markAllChannelsRead()).toEqual([]);
+  expect(h.journal()?.revision).toBe(revision);
+
+  h.emit([
+    message(h.alice, "room", "three", 13),
+    message(h.alice, "other", "four", 14),
+  ]);
+  const later = { room: 13, other: 14 };
+  const order = h.session.channels
+    .list()
+    .channels.map((channel) => channel.id)
+    .filter((id) => id in later) as (keyof typeof later)[];
+  const [first, second] = order;
+  assert(first && second);
+  h.failSave();
+  await expect(unread.markAllChannelsRead()).rejects.toThrow("disk full");
+  // The failing channel kept its old frontier while the sweep went on.
+  expect(h.journal()?.state.frontiers).toEqual({
+    room: 11,
+    other: 12,
+    [second]: later[second],
+  });
+  expect(
+    unread.snapshot({ kind: "channel", channelId: first }).observedCount,
+  ).toBe(1);
+  expect(
+    unread.snapshot({ kind: "channel", channelId: second }).observedCount,
+  ).toBe(0);
+});
+
 it("channel read clears local intent without fabricating a frontier when no messages are known", async () => {
   const h = setup();
   h.grant("room");

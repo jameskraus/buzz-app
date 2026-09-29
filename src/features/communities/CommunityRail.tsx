@@ -1,20 +1,29 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Avatar } from "../../shared/design-system/ui/Avatar";
 import { IconButton } from "../../shared/design-system/ui/IconButton";
 import { GlobeIcon, PlusIcon } from "../../shared/design-system/icons/index";
+import type { OpenTarget } from "../navigation/targets";
+import { communityFromScope } from "../relay/gifs";
+import { useRelayConnection } from "../relay/react";
+import { inviteMintingAvailable } from "./api";
 import type { Communities } from "./service";
 import { CommunityDialog } from "./CommunityDialog";
+import { CommunityRailItem } from "./CommunityRailItem";
+import { communityDestination } from "./destination";
 import { Tooltip } from "../../shared/design-system/ui/Tooltip";
 import styles from "./Communities.module.css";
 import { fetchCommunityIcon } from "./community-icon";
+import { useCommunityRole } from "./useCommunityRole";
 
 /** Shell navigation only: selecting a community remains owned by Communities. */
 export function CommunityRail({
   communities,
   onSelect,
+  onOpenTarget,
 }: {
   communities: Communities;
   onSelect?: ((id: string | null) => void) | undefined;
+  /** Menu destinations (Invites, Community settings) open through the host's navigation. */
+  onOpenTarget?: ((target: OpenTarget) => void) | undefined;
 }) {
   const [joining, setJoining] = useState(false);
   const addRef = useRef<HTMLButtonElement>(null);
@@ -26,6 +35,26 @@ export function CommunityRail({
   const client = useSyncExternalStore(
     communities.subscribe,
     communities.snapshot,
+  );
+  // The compatibility reader follows selection, so this is only ever the
+  // selected community's session; inactive communities stay unacquired.
+  const connection = useRelayConnection(communities.relay);
+  const selectedOrigin = client.selected
+    ? communityDestination(client.selected).url
+    : null;
+  const session =
+    connection.status === "ready" &&
+    connection.scope &&
+    communityFromScope(connection.scope) === selectedOrigin
+      ? connection.session
+      : undefined;
+  // Roles come from the relay-signed roster, as the Invites card derives them.
+  // Skip the read where no item could use it.
+  const invites = inviteMintingAvailable() && !!onOpenTarget;
+  const role = useCommunityRole(
+    invites ? session : undefined,
+    selectedOrigin,
+    client.viewer,
   );
   const [icons, setIcons] = useState<Record<string, string>>({});
   const membershipIds = client.memberships
@@ -73,27 +102,25 @@ export function CommunityRail({
             onClick={() => select(null)}
           />
         </Tooltip>
-        {client.memberships.map((membership) => (
-          <Tooltip content={membership.name} side="right" key={membership.id}>
-            <IconButton
-              aria-label={`Switch to ${membership.name}`}
-              aria-current={
-                client.selected === membership.id ? "true" : undefined
-              }
-              data-selected={client.selected === membership.id || undefined}
-              icon={
-                <Avatar
-                  size="small"
-                  shape="squircle"
-                  alt=""
-                  fallback={membership.name}
-                  src={icons[membership.id] ?? membership.icon}
-                />
-              }
-              onClick={() => select(membership.id)}
+        {client.memberships.map((membership) => {
+          const selected = client.selected === membership.id;
+          return (
+            <CommunityRailItem
+              key={membership.id}
+              membership={membership}
+              icon={icons[membership.id] ?? membership.icon}
+              selected={selected}
+              viewer={client.viewer}
+              session={selected ? session : undefined}
+              manager={selected && invites && role.manager}
+              onSelect={select}
+              onOpenTarget={onOpenTarget}
+              // Roles can change while the app runs; opening the selected
+              // community's menu re-reads the roster it gates on.
+              onMenuOpen={selected && invites ? role.refresh : undefined}
             />
-          </Tooltip>
-        ))}
+          );
+        })}
         <Tooltip content="Add a community" side="right">
           <IconButton
             ref={addRef}

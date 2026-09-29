@@ -7,6 +7,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import type { RegisteredPage } from "../../features/pages/service";
 import type { AccountActionsService } from "../../features/account-actions/service";
 import type { Communities } from "../../features/communities/service";
+import type { OpenTarget } from "../../features/navigation/targets";
 import { CommunityRail } from "../../features/communities/CommunityRail";
 import { ProfileButton } from "./ProfileButton";
 import { PageSearch, type SearchServices } from "./PageSearch";
@@ -30,6 +31,7 @@ export function AppShell({
   searchServices,
   navigationControls,
   onCommunitySelect,
+  onOpenTarget,
   launchers,
   companion,
   children,
@@ -46,6 +48,8 @@ export function AppShell({
   searchServices?: SearchServices;
   navigationControls?: ReactNode;
   onCommunitySelect?: (id: string | null) => void;
+  /** Community menu destinations, opened through the host's navigation. */
+  onOpenTarget?: (target: OpenTarget) => void;
   launchers?: ReactNode;
   companion?: ReactNode;
   children: ReactNode;
@@ -144,7 +148,11 @@ export function AppShell({
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <CommunityRail communities={communities} onSelect={onCommunitySelect} />
+        <CommunityRail
+          communities={communities}
+          onSelect={onCommunitySelect}
+          onOpenTarget={onOpenTarget}
+        />
         <div
           className={`shell-body ${selected === "settings" ? "shell-body-settings" : ""}`}
         >
