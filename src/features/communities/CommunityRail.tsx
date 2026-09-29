@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { AlertDialog } from "../../shared/design-system/ui/AlertDialog";
+import { Button } from "../../shared/design-system/ui/Button";
 import { IconButton } from "../../shared/design-system/ui/IconButton";
 import { GlobeIcon, PlusIcon } from "../../shared/design-system/icons/index";
+import { useToastNotification } from "../../shared/design-system/ui/Toast";
 import type { OpenTarget } from "../navigation/targets";
 import { communityFromScope } from "../relay/gifs";
 import { useRelayConnection } from "../relay/react";
-import { inviteMintingAvailable } from "./api";
-import type { Communities } from "./service";
+import { inviteMintingAvailable, requestLeave } from "./api";
+import type { Communities, Membership } from "./service";
 import { CommunityDialog } from "./CommunityDialog";
 import { CommunityRailItem } from "./CommunityRailItem";
 import { communityDestination } from "./destination";
@@ -32,6 +35,23 @@ export function CommunityRail({
     if (wasJoining.current && !joining) addRef.current?.focus();
     wasJoining.current = joining;
   }, [joining]);
+  // The confirm dialog belongs to the rail so it outlives the item it removes.
+  const [leaving, setLeaving] = useState<{
+    membership: Membership;
+    pending: boolean;
+  } | null>(null);
+  const personalRef = useRef<HTMLButtonElement>(null);
+  const buttons = useRef(new Map<string, HTMLElement>());
+  const wasLeaving = useRef<Membership | null>(null);
+  useEffect(() => {
+    // Focus returns to the community when it is still saved (cancel or failure),
+    // otherwise to Personal space, where a left selection now lands.
+    const previous = wasLeaving.current;
+    if (previous && !leaving)
+      (buttons.current.get(previous.id) ?? personalRef.current)?.focus();
+    wasLeaving.current = leaving?.membership ?? null;
+  }, [leaving]);
+  const notify = useToastNotification();
   const client = useSyncExternalStore(
     communities.subscribe,
     communities.snapshot,
@@ -90,11 +110,34 @@ export function CommunityRail({
     if (onSelect) onSelect(id);
     else communities.select(id);
   };
+  /** Publish first; the device forgets the community only once the relay has
+   * released the membership or reports it never held one. Anything else keeps
+   * the membership and the menu item for a retry. */
+  const leave = async () => {
+    if (!leaving || leaving.pending) return;
+    const { membership } = leaving;
+    setLeaving({ membership, pending: true });
+    try {
+      const outcome = await requestLeave(membership.id);
+      await communities.leave(membership.id);
+      if (outcome === "already-absent")
+        notify(
+          `You were no longer a member of ${membership.name}, so it was removed from this device.`,
+          "info",
+        );
+      else notify(`Left ${membership.name}.`, "success");
+    } catch (error) {
+      notify(leaveFailureText(membership.name, error), "error");
+    } finally {
+      setLeaving(null);
+    }
+  };
   return (
     <>
       <nav aria-label="Communities" className={styles.rail}>
         <Tooltip content="Personal space" side="right">
           <IconButton
+            ref={personalRef}
             aria-label="Personal space"
             aria-current={client.selected === null ? "true" : undefined}
             data-selected={client.selected === null || undefined}
@@ -113,11 +156,21 @@ export function CommunityRail({
               viewer={client.viewer}
               session={selected ? session : undefined}
               manager={selected && invites && role.manager}
+              leaving={
+                leaving?.membership.id === membership.id && leaving.pending
+              }
               onSelect={select}
               onOpenTarget={onOpenTarget}
               // Roles can change while the app runs; opening the selected
               // community's menu re-reads the roster it gates on.
               onMenuOpen={selected && invites ? role.refresh : undefined}
+              onLeave={(target) =>
+                setLeaving({ membership: target, pending: false })
+              }
+              buttonRef={(node) => {
+                if (node) buttons.current.set(membership.id, node);
+                else buttons.current.delete(membership.id);
+              }}
             />
           );
         })}
@@ -138,6 +191,44 @@ export function CommunityRail({
           close={() => setJoining(false)}
         />
       )}
+      {leaving && (
+        <AlertDialog
+          title={`Leave ${leaving.membership.name}?`}
+          description={`This sends a leave request to the community’s relay, then removes ${leaving.membership.name} from this device along with its saved drafts and reading positions. Rejoining may need a new invite.`}
+          pending={leaving.pending}
+          onClose={() => setLeaving(null)}
+          // The rail's own effect places focus once the dialog is gone.
+          finalFocus={false}
+          actions={
+            <>
+              <Button
+                disabled={leaving.pending}
+                onClick={() => setLeaving(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                loading={leaving.pending}
+                onClick={() => void leave()}
+              >
+                Leave community
+              </Button>
+            </>
+          }
+        />
+      )}
     </>
   );
+}
+
+/** Relay-authored refusals the viewer can act on read verbatim-ish; everything
+ * else, including timeouts and unreachable relays, keeps one retry message. */
+function leaveFailureText(name: string, error: unknown) {
+  const reason = error instanceof Error ? error.message : "";
+  if (reason === "invalid: relay owner cannot leave")
+    return `The relay owner can’t leave ${name}.`;
+  if (reason === "blocked: you are banned from this community")
+    return `${name} has blocked this identity, so the leave request was refused.`;
+  return `Couldn’t leave ${name}. Check your connection and try again.`;
 }

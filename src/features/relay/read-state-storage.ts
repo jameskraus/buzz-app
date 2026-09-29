@@ -142,6 +142,40 @@ export function readJournal(raw: unknown, viewer: string): ReadJournal {
     ...(pending ? { pending } : {}),
   };
 }
+function openDatabase() {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open("buzz-read-state-v1", 1);
+    request.onupgradeneeded = () =>
+      request.result.createObjectStore("partitions");
+    request.onsuccess = () => {
+      request.result.onversionchange = () => request.result.close();
+      resolve(request.result);
+    };
+    request.onerror = () => reject(request.error);
+    request.onblocked = () =>
+      reject(new Error("Close other Buzz windows to open read state"));
+  });
+}
+/** Forgets one partition's journal after its session is disposed, so a left
+ * community's read markers do not outlive the membership on this device. */
+export async function purgeReadStateStorage(scope: string) {
+  if (typeof indexedDB === "undefined") return;
+  const db = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction("partitions", "readwrite", {
+        durability: "strict",
+      });
+      tx.objectStore("partitions").delete(scope);
+      tx.oncomplete = () => resolve();
+      tx.onabort = () =>
+        reject(tx.error ?? new Error("Read-state purge aborted"));
+      tx.onerror = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
+}
 export function browserReadStateStorage(
   scope: string,
   viewer: string,
@@ -150,18 +184,7 @@ export function browserReadStateStorage(
   let closed = false;
   function open() {
     if (closed) return Promise.reject(new Error("Read-state storage closed"));
-    database ??= new Promise((resolve, reject) => {
-      const request = indexedDB.open("buzz-read-state-v1", 1);
-      request.onupgradeneeded = () =>
-        request.result.createObjectStore("partitions");
-      request.onsuccess = () => {
-        request.result.onversionchange = () => request.result.close();
-        resolve(request.result);
-      };
-      request.onerror = () => reject(request.error);
-      request.onblocked = () =>
-        reject(new Error("Close other Buzz windows to open read state"));
-    });
+    database ??= openDatabase();
     return database;
   }
   return {

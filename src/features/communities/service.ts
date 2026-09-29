@@ -6,6 +6,7 @@ import { Context } from "@deepseek-ai/cordis";
 import { provideRelay, type RelayData } from "../relay/service";
 import { connectBrokerTransport, type ReadTransport } from "../relay/transport";
 import { communityDestination, isCommunityAlias } from "./destination";
+import { purgeCommunityDeviceState } from "./device-state";
 
 export const PROFILE_ABOUT_MAX_LENGTH = 500;
 export type PersonalProfile = { name: string; picture: string; about?: string };
@@ -56,6 +57,8 @@ export function createCommunities(
   const listeners = new Set<() => void>();
   const relayListeners = new Set<() => void>();
   const sessions = new Map<string, RelayData>();
+  // Each session owns a scope so leaving can dispose exactly that one.
+  const sessionScopes = new Map<string, Context>();
   const scopes: Context[] = [];
   const disconnected = provideRelay(
     newScope(),
@@ -110,8 +113,9 @@ export function createCommunities(
     if (!connect) return disconnected;
     let session = sessions.get(id);
     if (!session) {
+      const scope = newScope();
       session = provideRelay(
-        newScope(),
+        scope,
         (signal) => connect(id, signal),
         presenceActivity,
         identityNames,
@@ -119,6 +123,7 @@ export function createCommunities(
         viewer ? { viewer, scope: communityDestination(id).url } : undefined,
       );
       sessions.set(id, session);
+      sessionScopes.set(id, scope);
       session.subscribe(() => {
         if (state.selected === id) emitRelay();
       });
@@ -296,6 +301,34 @@ export function createCommunities(
       if (sessions.has(membership.id)) sessions.get(membership.id)?.retry();
       else acquire(membership.id);
       emitRelay();
+    },
+    /** Forgets a saved community on this device once its relay has released
+     * the membership (or never held one). Drops the membership, falls back to
+     * Personal space when it was selected, disposes its retained session, then
+     * purges the device state keyed by that origin and viewer. Persistence
+     * follows `joined`: required where the device record is the only copy. */
+    async leave(id: string) {
+      id = communityDestination(id).id;
+      if (!state.memberships.some((m) => m.id === id)) return;
+      const { viewer } = state;
+      update(
+        {
+          memberships: state.memberships.filter((m) => m.id !== id),
+          ...(state.selected === id ? { selected: null } : {}),
+        },
+        true,
+        !!nativeConnect && !live,
+      );
+      const scope = sessionScopes.get(id);
+      sessions.delete(id);
+      sessionScopes.delete(id);
+      if (scope) {
+        scopes.splice(scopes.indexOf(scope), 1);
+        await scope.fiber.dispose();
+      }
+      // Nothing below can write to the purged stores: the session is gone.
+      if (viewer)
+        await purgeCommunityDeviceState(communityDestination(id).url, viewer);
     },
   };
 }

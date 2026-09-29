@@ -13,6 +13,7 @@ import {
   ChecksIcon,
   GearIcon,
   LinkIcon,
+  SignOutIcon,
   TicketIcon,
 } from "../../shared/design-system/icons/index";
 import { Avatar } from "../../shared/design-system/ui/Avatar";
@@ -54,9 +55,12 @@ export function CommunityRailItem({
   viewer,
   session,
   manager,
+  leaving,
   onSelect,
   onOpenTarget,
   onMenuOpen,
+  onLeave,
+  buttonRef,
 }: {
   membership: Membership;
   icon: string | undefined;
@@ -66,16 +70,22 @@ export function CommunityRailItem({
   session: SelectedSession | undefined;
   /** The viewer is an owner or admin of this community, and this build can mint invites. */
   manager: boolean;
+  /** A leave request for this community is in flight. */
+  leaving: boolean;
   onSelect: (id: string) => void;
   onOpenTarget?: ((target: OpenTarget) => void) | undefined;
   onMenuOpen?: (() => void) | undefined;
+  /** Asks the rail to confirm and run a leave; the rail owns the dialog. */
+  onLeave: (membership: Membership) => void;
+  /** Lets the rail return focus here after its dialogs close. */
+  buttonRef?: ((node: HTMLElement | null) => void) | undefined;
 }) {
   // A keyboard open anchors to the rail item; a pointer open leaves the anchor
   // to Base UI's cursor point.
   const [menu, setMenu] = useState<{
     anchor: HTMLElement | undefined;
   } | null>(null);
-  const button = useRef<HTMLButtonElement>(null);
+  const button = useRef<HTMLElement | null>(null);
   const navigated = useRef(false);
   // Outlives `menu`, which is already null when the closing menu asks where
   // focus should go.
@@ -127,7 +137,10 @@ export function CommunityRailItem({
       >
         <Tooltip content={name} side="right">
           <IconButton
-            ref={button}
+            ref={(node) => {
+              button.current = node;
+              buttonRef?.(node);
+            }}
             aria-label={`Switch to ${name}`}
             aria-current={selected ? "true" : undefined}
             data-selected={selected || undefined}
@@ -205,6 +218,19 @@ export function CommunityRailItem({
             Community settings
           </MenuItem>
         )}
+        <MenuSeparator />
+        <MenuItem
+          tone="danger"
+          disabled={leaving}
+          onClick={() => {
+            if (!leaving) onLeave(membership);
+          }}
+        >
+          <MenuIcon>
+            <SignOutIcon size={14} />
+          </MenuIcon>
+          {leaving ? "Leaving…" : "Leave community"}
+        </MenuItem>
       </MenuPopup>
     </ContextMenuRoot>
   );

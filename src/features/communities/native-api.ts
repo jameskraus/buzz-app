@@ -5,6 +5,7 @@ import {
   nativeRelayRequest,
   nativeRelaySigner,
 } from "../relay/native";
+import { leaveRefusal, leaveRequestTemplate } from "./leave-protocol";
 import type { PersonalProfile } from "./service";
 
 export async function nativeCommunityRequest(
@@ -137,23 +138,44 @@ export async function nativeCommunityRequest(
       throw new Error("Profile publication was not confirmed");
     return result;
   }
+  if (route === "leave") {
+    // The membership refusals come back verbatim so the caller can tell an
+    // already-absent membership from a failed request.
+    const event = await nativeRelaySigner(community).signEvent(
+      leaveRequestTemplate(),
+    );
+    const result = await readResponse(
+      await nativeRelayRequest(community, "/events", event, signal),
+      leaveRefusal,
+    );
+    if (result.event_id !== event.id || result.accepted !== true)
+      throw new Error("The leave request was not confirmed");
+    return result;
+  }
   throw new Error("This operation is unavailable on the packaged connection");
+}
+
+/** Exact invite admission refusal codes (buzz-relay api/invites.rs). */
+function admissionRefusal(result: unknown) {
+  const body = result as { error?: unknown; reason?: unknown } | null;
+  return [
+    "invite_expired",
+    "invite_exhausted",
+    "invite_invalid",
+    "join_policy_required",
+    "join_policy_not_accepted",
+  ].find((value) => body?.error === value || body?.reason === value);
 }
 
 async function readResponse(
   response: Response,
+  refusal: (result: unknown) => string | undefined = admissionRefusal,
 ): Promise<Record<string, unknown>> {
   const result = await response.json();
-  if (!response.ok) {
-    const refusal = [
-      "invite_expired",
-      "invite_exhausted",
-      "invite_invalid",
-      "join_policy_required",
-      "join_policy_not_accepted",
-    ].find((value) => result?.error === value || result?.reason === value);
-    throw new Error(refusal ?? `Community request failed (${response.status})`);
-  }
+  if (!response.ok)
+    throw new Error(
+      refusal(result) ?? `Community request failed (${response.status})`,
+    );
   if (!result || typeof result !== "object" || Array.isArray(result))
     throw new Error("Invalid community response");
   return result;

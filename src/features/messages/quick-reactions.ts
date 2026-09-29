@@ -55,6 +55,10 @@ export function recordReaction(scope: string, emoji: string) {
     /* Preference failure must not block a reaction. */
   }
 }
+/** Forgets one community's shortcut history once the viewer has left it. */
+export function forgetQuickReactions(scope: string) {
+  localStorage.removeItem(key(scope));
+}
 /** Freeze shortcuts during use; reload or another window's update refreshes them. */
 export function useQuickReactions(
   scope: string,

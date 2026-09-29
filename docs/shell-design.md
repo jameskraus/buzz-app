@@ -117,7 +117,8 @@ Unavailable or unsupported images fall back to a saved icon or name initial.
 Each saved community has a context menu (right-click, the ContextMenu key or
 Shift+F10, labelled “Actions for <name>”) built from the shared context-menu
 primitives, in the original's order: Mark all as read, then Copy community URL,
-Invite to community and Community settings. Copy writes the canonical HTTPS
+Invite to community and Community settings, then a separator and the destructive
+Leave community. Copy writes the canonical HTTPS
 origin and reports through the host toast stack. Mark all as read acts only on
 the selected community's ready session and only while its read state can sync;
 elsewhere it stays visible but disabled with a note saying why. Invite to
@@ -126,7 +127,16 @@ roster names the viewer an owner or admin (the same derivation the Invites
 settings card uses), and never in native builds, which cannot mint invites; it
 opens the Invites settings card scoped to that community. Community settings is
 on every community and opens Settings scoped to that community's origin, which
-selects it on the way. Closing a menu opened from the keyboard returns focus to
+selects it on the way. Leave community is on every community and opens an alert
+dialog owned by the rail (“Leave <name>?”) whose destructive confirm shows a
+pending state while the request runs; the menu item itself is disabled and reads
+“Leaving…” for that community until the relay answers. The rail publishes the
+NIP-43 leave request to the community's relay by origin, then asks the
+communities service to forget it; the relay's acceptance or its "not a member"
+answer removes the community and reports through the toast stack, while any
+other failure keeps the membership and reports the reason. Focus returns to the
+community when it is still saved and to Personal space once it is gone. Closing
+a menu opened from the keyboard returns focus to
 that community; closing one opened by pointer restores whatever had focus
 before, so a right-click while typing does not move the caret to the rail.
 Opening a menu or running any item never acquires an inactive session, and the

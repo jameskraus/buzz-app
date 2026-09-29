@@ -2114,6 +2114,112 @@ test("member change receipts must match the signed command", async () => {
   }
 });
 
+test("leave requests sign the exact NIP-43 shape for the selected community only", async () => {
+  const { h, post } = await communityAdmin((call) =>
+    Response.json({ accepted: true, event_id: call.body.id, message: "" }),
+  );
+  try {
+    const response = await post("leave", {});
+    expect(response.status).toBe(200);
+    const sent = h.calls.at(-1);
+    expect(sent.url).toBe(`${fixtureRelayUrl}/events`);
+    expect(verifyEvent(sent.body)).toBe(true);
+    expect(sent.body).toMatchObject({
+      kind: 28936,
+      tags: [["-"]],
+      content: "",
+      pubkey: h.event.pubkey,
+      created_at: Math.floor(Date.now() / 1000),
+    });
+    expect(await response.json()).toMatchObject({
+      accepted: true,
+      event_id: sent.body.id,
+    });
+    // The request body carries nothing: a client cannot smuggle another kind
+    // or extra tags into the signed event.
+    const shaped = await post("leave", {
+      kind: 9031,
+      tags: [["p", "a".repeat(64)]],
+      content: "bye",
+    });
+    expect(shaped.status).toBe(200);
+    expect(h.calls.at(-1).body).toMatchObject({
+      kind: 28936,
+      tags: [["-"]],
+      content: "",
+    });
+    // Unscoped requests name no community to leave.
+    expect((await h.post("leave", {})).status).toBe(400);
+    expect(h.calls).toHaveLength(2);
+  } finally {
+    await h.close();
+  }
+});
+
+test("leave receipts must match the signed request", async () => {
+  const { h, post } = await communityAdmin(() =>
+    Response.json({ accepted: true, event_id: "wrong" }),
+  );
+  try {
+    const response = await post("leave", {});
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({
+      error: "Leave request could not be confirmed",
+    });
+  } finally {
+    await h.close();
+  }
+});
+
+test.each([
+  [
+    400,
+    "invalid: you are not a relay member",
+    "invalid: you are not a relay member",
+  ],
+  [
+    400,
+    "invalid: relay membership is not enabled",
+    "invalid: relay membership is not enabled",
+  ],
+  [
+    400,
+    "invalid: relay owner cannot leave",
+    "invalid: relay owner cannot leave",
+  ],
+  [
+    403,
+    "blocked: you are banned from this community",
+    "blocked: you are banned from this community",
+  ],
+  [
+    503,
+    "community writes are temporarily unavailable",
+    "community writes are temporarily unavailable",
+  ],
+  // Admin refusals are not leave refusals.
+  [400, "invalid: cannot remove yourself", "Relay request failed (400)"],
+  [
+    400,
+    "invalid: database error: connection reset <script>",
+    "Relay request failed (400)",
+  ],
+])(
+  "leave refusal %i %j is surfaced only when whitelisted",
+  async (status, error, shown) => {
+    const { h, post } = await communityAdmin(() =>
+      Response.json({ error }, { status }),
+    );
+    try {
+      const response = await post("leave", {});
+      expect(response.status).toBe(status);
+      expect((await response.json()).error).toBe(shown);
+    } finally {
+      await h.close();
+    }
+  },
+);
+
 test.each([
   [400, "invalid: cannot remove yourself", "invalid: cannot remove yourself"],
   [

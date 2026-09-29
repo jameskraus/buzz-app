@@ -20,6 +20,11 @@ function setup(saved?: unknown, savedViewer = viewer, openRelay = "") {
   vi.stubGlobal("localStorage", {
     getItem: (key: string) => storage.get(key) ?? null,
     setItem: (key: string, value: string) => storage.set(key, value),
+    removeItem: (key: string) => storage.delete(key),
+    key: (index: number) => [...storage.keys()][index] ?? null,
+    get length() {
+      return storage.size;
+    },
   });
   vi.stubGlobal(
     "fetch",
@@ -501,6 +506,104 @@ it("keeps a saved record, including Personal space, instead of the configured re
   expect(localStorage.getItem(`buzz-client.v1:${viewer}`)).toBe(
     JSON.stringify(saved),
   );
+});
+
+it("leave forgets the selected community: Personal space, a disposed session and purged device state", async () => {
+  const client = setup();
+  await flush();
+  client.joined(
+    { id: "primary", name: "Primary" },
+    { name: "Local", picture: "" },
+  );
+  await flush();
+  client.joined(
+    { id: "secondary", name: "Secondary" },
+    { name: "Local", picture: "" },
+  );
+  await flush();
+  client.select("primary");
+  const primaryScope = `${communityDestination("primary").url}:${viewer}`;
+  const secondaryScope = `${communityDestination("secondary").url}:${viewer}`;
+  writeView(primaryScope, "draft:general", "unsent");
+  writeView(primaryScope, "channel", "general");
+  writeView(secondaryScope, "draft:general", "kept");
+  const sessions = () => requests.filter((url) => url.endsWith("/session"));
+  const before = sessions().length;
+  await client.leave("primary");
+  expect(client.snapshot()).toMatchObject({
+    selected: null,
+    memberships: [{ id: "secondary", name: "Secondary" }],
+  });
+  expect(client.relay.snapshot().status).toBe("disconnected");
+  expect(
+    JSON.parse(localStorage.getItem(`buzz-client.v1:${viewer}`) ?? "null"),
+  ).toMatchObject({
+    memberships: [{ id: "secondary", name: "Secondary" }],
+    selected: null,
+  });
+  // Only the left community's partition is gone.
+  expect(readView(primaryScope, "draft:general", "")).toBe("");
+  expect(readView(primaryScope, "channel", "")).toBe("");
+  expect(readView(secondaryScope, "draft:general", "")).toBe("kept");
+  // The retained session was disposed: rejoining connects afresh.
+  client.joined(
+    { id: "primary", name: "Primary" },
+    { name: "Local", picture: "" },
+  );
+  await flush();
+  await flush();
+  expect(sessions()).toHaveLength(before + 1);
+  expect(sessions().at(-1)).toBe("/api/relay/primary/session");
+  expect(client.relay.snapshot().status).toBe("ready");
+});
+
+it("leave of an inactive community keeps the selection and its session; unknown ids are a no-op", async () => {
+  const client = setup();
+  await flush();
+  client.joined(
+    { id: "primary", name: "Primary" },
+    { name: "Local", picture: "" },
+  );
+  await flush();
+  client.joined(
+    { id: "secondary", name: "Secondary" },
+    { name: "Local", picture: "" },
+  );
+  await flush();
+  const active = client.relay.snapshot();
+  await client.leave("primary");
+  expect(client.snapshot()).toMatchObject({
+    selected: "secondary",
+    memberships: [{ id: "secondary" }],
+  });
+  expect(client.relay.snapshot()).toBe(active);
+  const state = client.snapshot();
+  const persisted = localStorage.getItem(`buzz-client.v1:${viewer}`);
+  await client.leave("https://unknown.example");
+  expect(client.snapshot()).toBe(state);
+  expect(localStorage.getItem(`buzz-client.v1:${viewer}`)).toBe(persisted);
+});
+
+it("leaving the last community lands on Personal space with an empty saved record", async () => {
+  const client = setup({
+    profile: { name: "Local", picture: "" },
+    memberships: [{ id: "primary", name: "Primary" }],
+    selected: "primary",
+  });
+  await flush();
+  await flush();
+  expect(client.relay.snapshot().status).toBe("ready");
+  // Alternate spellings resolve to the saved canonical id.
+  await client.leave("wss://PRIMARY.example:443/");
+  expect(client.snapshot()).toMatchObject({ memberships: [], selected: null });
+  expect(client.relay.snapshot().status).toBe("disconnected");
+  expect(
+    JSON.parse(localStorage.getItem(`buzz-client.v1:${viewer}`) ?? "null"),
+  ).toEqual({
+    profile: { name: "Local", picture: "", about: "" },
+    memberships: [],
+    selected: null,
+  });
 });
 
 it("hydrates presence intent before acquiring a retained session and keeps it across communities", async () => {

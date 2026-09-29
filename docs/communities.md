@@ -70,11 +70,18 @@ space. Personal space
 clears selection without forgetting memberships. The rail’s Add control opens the
 existing join dialog; displaying saved communities reads relay metadata but does not open sessions for them.
 Right-click a saved community (or press the ContextMenu key or Shift+F10 on it)
-for Mark all as read, Copy community URL, Invite to community and Community
-settings. Only the selected community can be marked read, and only while its read
-state syncs; Invite shows only where the viewer owns or administers the selected
-community and this build can mint invites. Copy and Community settings work on
-inactive communities without opening their sessions. Messages shows an intentional
+for Mark all as read, Copy community URL, Invite to community, Community
+settings and, last, Leave community. Only the selected community can be marked
+read, and only while its read state syncs; Invite shows only where the viewer
+owns or administers the selected community and this build can mint invites. Copy,
+Community settings and Leave work on inactive communities without opening their
+sessions. Leave asks for confirmation, then sends a signed NIP-43 leave request
+(kind 28936) to that community's relay before the device forgets it: the relay
+accepting, or answering that the viewer is not a member, removes the community
+here and clears its drafts, reading positions and other device state; any other
+refusal or an unreachable relay keeps the membership and reports the failure so
+Leave can be tried again. A left community that was selected lands on Personal
+space. Messages shows an intentional
 empty state there. Try drafting in A, switching to B, then returning to A.
 Selected channels, drafts and reading offsets are partitioned by the canonical
 community origin and viewer; channel IDs alone are not sufficient keys.
@@ -103,9 +110,9 @@ not a plugin key service.
 
 Packaged builds do not include the broker. Native macOS, Windows and Linux
 [identity import/create](identity.md) and the shared native relay adapter provide
-discovery, admission, profile publication, authenticated reads and supported event
-writes. Windows/Linux installed-app acceptance remains unverified. Community
-creation/removal and background connection eviction are not implemented. Native
+discovery, admission, leave requests, profile publication, authenticated reads and
+supported event writes. Windows/Linux installed-app acceptance remains unverified.
+Community creation and background connection eviction are not implemented. Native
 agent enrollment has its own [local control contract](agent-control.md). Avatar
 uploads still require the development media host. Agents have local
 configuration plus separately scoped participation; selecting a community must
@@ -190,7 +197,14 @@ backup; same-origin plugin JavaScript is trusted and can invoke that IPC too.
 ## Verification
 
 `src/features/communities/service.test.ts` covers no-community initialization,
-local profiles, scoped view intent, session retention and selective restoration.
+local profiles, scoped view intent, session retention, selective restoration and
+leaving (membership removal, Personal space fallback, session disposal, purged
+device state and the last community). `CommunityRail.test.tsx` covers the leave
+flow end to end against the broker route: confirm, publish, then remove; cancel;
+refusals and timeouts that keep the membership; the already-absent answer; the
+in-flight state; and that no inactive session is acquired. `device-state.test.ts`
+covers the per-origin purge. The broker and native adapter tests sign the exact
+leave shape and pass through only the relay's known refusals.
 `broker.test.ts` runs real localhost HTTP with signed fixture events to verify
 multi-community routing, profile publication, invite claims, and a captured send
 after opening another community. `destination.test.ts` checks normalization and

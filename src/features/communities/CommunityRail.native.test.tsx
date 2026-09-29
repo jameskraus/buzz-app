@@ -97,4 +97,8 @@ it("hides Invite to community and disables Mark all as read in a native build", 
   );
   // No invite means no roster to gate on, so nothing was read for the menu.
   expect(read).not.toHaveBeenCalled();
+  // Leaving is offered in native builds too, always as the last action.
+  const actions = within(menu).getAllByRole("menuitem");
+  expect(actions.at(-1)).toHaveTextContent("Leave community");
+  expect(actions.at(-1)).not.toHaveAttribute("aria-disabled");
 });

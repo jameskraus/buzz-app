@@ -148,7 +148,9 @@ for newer manual-unread intent.
 ## Durable sync and privacy
 
 The journal is separate from disposable message caches in `buzz-read-state-v1`,
-partitioned by relay/community scope and viewer. IndexedDB strict read/write
+partitioned by relay/community scope and viewer. Leaving a community deletes that
+partition along with the community's other device state; other partitions are
+untouched. IndexedDB strict read/write
 transactions merge concurrent local windows; Web Locks serialize the publisher.
 Without host decoding the capability is `unsupported`; without safe serialized
 sign/publish it is `read-only`. Read sync requires `frontier-sync`. Local manual

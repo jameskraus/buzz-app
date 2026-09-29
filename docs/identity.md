@@ -82,7 +82,8 @@ NIP-11 `self` establishes relay authority; the operator-contact `pubkey` is not
 a substitute. The existing live owner handles WSS/NIP-42 authentication and
 signature verification. IPC permissions remain limited to the main WebView.
 
-Community admission, kind-0 profile reads/publication and the adapter's advertised
+Community admission, kind-0 profile reads/publication, the NIP-43 leave request
+(kind 28936, signed only in its empty protected shape) and the adapter's advertised
 message/event writes use this identity. [Join recovery](communities.md#packaged-admission-and-recovery)
 records public progress before remote changes. The existing durable outbox retains
 uncertain delivery across restart; retry uses the same signed event with fresh HTTP

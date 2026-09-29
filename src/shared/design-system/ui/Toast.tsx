@@ -153,7 +153,7 @@ export function ToastNotice({
 /** Completed actions belong to the host stack, not the originating row's lifetime. */
 export function useToastNotification() {
   const { add } = BaseToast.useToastManager<NoticeData>();
-  return (title: string, tone: "success" | "error") =>
+  return (title: string, tone: "success" | "error" | "info") =>
     add({
       title,
       type: tone,

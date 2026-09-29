@@ -1,29 +1,58 @@
 import type { OutboxStorage, OutgoingEvent } from "./outbox";
 
+function openDatabase() {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open("buzz-outbox-v2", 2);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains("partitions"))
+        db.createObjectStore("partitions");
+      if (!db.objectStoreNames.contains("events"))
+        db.createObjectStore("events", {
+          keyPath: ["scope", "id"],
+        }).createIndex("scope", "scope");
+    };
+    request.onsuccess = () => {
+      request.result.onversionchange = () => request.result.close();
+      resolve(request.result);
+    };
+    request.onerror = () => reject(request.error);
+    request.onblocked = () =>
+      reject(new Error("Close other Buzz windows to upgrade the outbox"));
+  });
+}
+
+/** Drops one partition's journal, including its legacy record, after that
+ * community's session is disposed: nothing left there can still be delivered. */
+export async function purgeOutboxStorage(scope: string) {
+  localStorage.removeItem(`buzz-outbox-v1:${scope}`);
+  if (typeof indexedDB === "undefined") return;
+  const db = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(["events", "partitions"], "readwrite", {
+        durability: "strict",
+      });
+      const events = tx.objectStore("events");
+      const keys = events.index("scope").getAllKeys(IDBKeyRange.only(scope));
+      keys.onsuccess = () => {
+        for (const key of keys.result) events.delete(key);
+      };
+      tx.objectStore("partitions").delete(scope);
+      tx.oncomplete = () => resolve();
+      tx.onabort = () => reject(tx.error ?? new Error("Outbox purge aborted"));
+      tx.onerror = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
 /** Incremental asynchronous journal, atomically partitioned by relay and viewer. */
 export function browserOutboxStorage(scope: string): OutboxStorage {
   let database: Promise<IDBDatabase> | undefined;
   let persisted = new Map<string, OutgoingEvent>();
-  const open = () =>
-    (database ??= new Promise((resolve, reject) => {
-      const request = indexedDB.open("buzz-outbox-v2", 2);
-      request.onupgradeneeded = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains("partitions"))
-          db.createObjectStore("partitions");
-        if (!db.objectStoreNames.contains("events"))
-          db.createObjectStore("events", {
-            keyPath: ["scope", "id"],
-          }).createIndex("scope", "scope");
-      };
-      request.onsuccess = () => {
-        request.result.onversionchange = () => request.result.close();
-        resolve(request.result);
-      };
-      request.onerror = () => reject(request.error);
-      request.onblocked = () =>
-        reject(new Error("Close other Buzz windows to upgrade the outbox"));
-    }));
+  const open = () => (database ??= openDatabase());
   return {
     async load() {
       const db = await open();

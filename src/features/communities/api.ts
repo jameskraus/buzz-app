@@ -1,6 +1,7 @@
 import { nativeIdentityEnabled } from "../identity/service";
 import { nativeCommunityRequest } from "./native-api";
-import { connectCommunityTransport } from "./connection";
+import { connectCommunityTransport, registerCommunity } from "./connection";
+import { membershipAbsent } from "./leave-protocol";
 import type { RelaySession } from "../relay/session";
 import type { PersonalProfile } from "./service";
 export type CommunityInfo = {
@@ -92,4 +93,26 @@ export async function publishProfile(
   }>(id, "profile", { ...profile, existing });
   if (!receipt.accepted || !receipt.event_id)
     throw new Error(receipt.message ?? "Profile publication was not confirmed");
+}
+export type LeaveOutcome = "left" | "already-absent";
+/** Publishes a NIP-43 leave request to the community's relay by origin, without
+ * acquiring a session. Resolves only once the relay accepts it or answers that
+ * it holds no membership for the viewer; any other refusal, transport failure
+ * or timeout throws and leaves the membership for the caller to retry. */
+export async function requestLeave(id: string): Promise<LeaveOutcome> {
+  await registerCommunity(id, AbortSignal.timeout(12000));
+  try {
+    const receipt = await communityRequest<{
+      accepted: boolean;
+      event_id: string;
+      message?: string;
+    }>(id, "leave", {});
+    if (!receipt.accepted || !receipt.event_id)
+      throw new Error(receipt.message ?? "The leave request was not confirmed");
+    return "left";
+  } catch (error) {
+    if (error instanceof Error && membershipAbsent(error.message))
+      return "already-absent";
+    throw error;
+  }
 }

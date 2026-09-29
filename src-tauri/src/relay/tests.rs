@@ -52,6 +52,41 @@ fn websocket_auth_is_bound_to_the_captured_community() {
     assert!(validate_event("https://relay.test", &event).is_err());
 }
 
+#[test]
+fn leave_requests_sign_only_the_protected_empty_shape() {
+    let leave = |content: &str, tags: Vec<Vec<String>>| EventTemplate {
+        kind: 28936,
+        created_at: 1,
+        content: content.into(),
+        tags,
+    };
+    let protected = || vec![vec!["-".to_string()]];
+    assert!(validate_event("https://relay.test", &leave("", protected())).is_ok());
+    for rejected in [
+        leave("bye", protected()),
+        leave("", vec![]),
+        leave("", vec![vec!["-".into(), "x".into()]]),
+        leave(
+            "",
+            vec![vec!["-".into()], vec!["h".into(), "channel".into()]],
+        ),
+        leave("", vec![vec!["p".into(), "a".repeat(64)]]),
+    ] {
+        assert!(validate_event("https://relay.test", &rejected).is_err());
+    }
+    // Member commands stay owner/admin-only on the broker; native signs none.
+    assert!(validate_event(
+        "https://relay.test",
+        &EventTemplate {
+            kind: 9031,
+            created_at: 1,
+            content: "".into(),
+            tags: vec![vec!["p".into(), "a".repeat(64)]],
+        }
+    )
+    .is_err());
+}
+
 fn fixture_server(response: &'static str) -> (Url, std::thread::JoinHandle<(String, String)>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let url = Url::parse(&format!("http://{}/query", listener.local_addr().unwrap())).unwrap();

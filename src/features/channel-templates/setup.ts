@@ -27,6 +27,20 @@ type Progress = {
   operations: Record<string, string>;
 };
 
+const receiptPrefix = (scope: string) => `buzz-channel-setup.v2:${scope}:`;
+
+/** Drops one community's unfinished setup receipts once the viewer has left it;
+ * their operations have no outbox left to retire against. */
+export function forgetChannelSetups(scope: string) {
+  const prefix = receiptPrefix(scope);
+  const stale: string[] = [];
+  for (let index = 0; index < localStorage.length; index++) {
+    const key = localStorage.key(index);
+    if (key?.startsWith(prefix)) stale.push(key);
+  }
+  for (const key of stale) localStorage.removeItem(key);
+}
+
 /** Frozen intent only. Signing, publication and delivery evidence stay in Outbox. */
 export function createChannelSetup({
   scope,
@@ -63,7 +77,7 @@ export function createChannelSetup({
 }) {
   // A separate namespace leaves historical single-slot and experimental v1
   // receipts byte-for-byte intact. They never become an implicit new Create.
-  const prefix = `buzz-channel-setup.v2:${scope}:`;
+  const prefix = receiptPrefix(scope);
   const encoder = new TextEncoder();
   let pending: Progress | undefined;
   let admitting: ReturnType<typeof run> | undefined;
