@@ -146,7 +146,7 @@ for (const action of ["archive", "delete"]) {
   });
 }
 
-// Real broker/profile verification -> both entry points -> shared dialog and
+// Real broker/authority discovery -> both entry points -> shared dialog and
 // confirmed navigation is the browser boundary; the authority matrix is in Vitest.
 test.describe("owned-agent Delete", () => {
   test.use({ lifecycleRole: "admin", lifecycleOwnerAgent: true });

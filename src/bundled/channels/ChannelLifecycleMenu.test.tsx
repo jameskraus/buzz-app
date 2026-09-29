@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -367,3 +368,60 @@ it("uncertain delivery keeps the dialog recoverable without offering blind resub
   expect(close).toHaveBeenCalledOnce();
   expect(lifecycle.run).toHaveBeenCalledOnce();
 });
+
+it.each([true, false])(
+  "Delete outage preserves sidebar Archive=%s and Leave, then retries",
+  async (canArchive) => {
+    const lifecycle = capability(),
+      choose = vi.fn();
+    lifecycle.load.mockResolvedValueOnce({
+      ...settings,
+      canArchive,
+      canLeave: true,
+      canDelete: false,
+      deleteUnavailable: "error",
+    });
+    render(
+      <ContextMenuRoot open>
+        <MenuPopup>
+          <ChannelLifecycleMenu
+            channelId="id"
+            lifecycle={lifecycle}
+            choose={choose}
+            disabled={false}
+            separator
+          />
+        </MenuPopup>
+      </ContextMenuRoot>,
+    );
+    expect(
+      await screen.findByRole("menuitem", {
+        name: "Delete permissions unavailable",
+      }),
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(
+      screen.getByRole("menuitem", { name: "Leave channel" }),
+    ).not.toHaveAttribute("aria-disabled", "true");
+    expect(!!screen.queryByRole("menuitem", { name: "Archive channel" })).toBe(
+      canArchive,
+    );
+    expect(
+      screen.queryByRole("menuitem", { name: "Delete channel" }),
+    ).toBeNull();
+    lifecycle.load.mockResolvedValue({
+      ...settings,
+      canArchive,
+      canLeave: true,
+    });
+    await userEvent
+      .setup()
+      .click(
+        screen.getByRole("menuitem", { name: "Retry Delete permissions" }),
+      );
+    expect(
+      await screen.findByRole("menuitem", { name: "Delete channel" }),
+    ).not.toHaveAttribute("aria-disabled", "true");
+    expect(screen.queryByText("Delete permissions unavailable")).toBeNull();
+    expect(choose).not.toHaveBeenCalled();
+  },
+);

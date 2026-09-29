@@ -300,14 +300,23 @@ Delete requires a direct owner role or verified ownership of an active owner-rol
 agent; the last owner cannot Leave. The menu omits
 Leave when it is forbidden, without an ownership-transfer explanation. Action
 labels have no trailing ellipsis. DMs offer Hide
-only. For the owner-agent Delete path, the shared lifecycle capability reads fresh
-kind-0 profiles for the validated owner-role members in batches of at most four
-exact-author filters. It verifies the single target-bound NIP-OA ownership tag's
-signature, never cached/display `ownerPubkey`. The newest returned profile controls
-eligibility; missing, malformed or foreign attestations grant nothing, and failed
-reads remain unavailable/retry rather than silently granting permission. This is
-ownership evidence, not delegation to sign as the agent: the viewer signs the
-unchanged Delete command, and the relay checks its current ownership state.
+only. For the owner-agent Delete path, the shared lifecycle capability uses the
+relay's version-1 `channel_delete_authority` extension over authenticated `POST
+/query`, discovered through host-bound NIP-11 metadata. The exact single-channel
+filter binds the signed request to the viewer; the bounded response envelope must
+match the discovered community, viewer and channel. This uses the same persisted
+agent-owner mapping and active owner roster as kind 9008, not current profile tags.
+Profile replacement neither transfers nor revokes that first-write-wins mapping.
+An authoritative `false` omits Delete. An absent capability or failed read instead
+explains **Delete permissions unavailable**, with retry for transient failures;
+independently verified Archive/Leave remain available. A five-second optional-read
+deadline, caller cancellation and access/session fences reject late authority.
+
+This requires deployment of the relay capability for owner-agent Delete. Older
+relays still support direct-owner Delete from signed channel state; they cannot
+establish owner-agent eligibility. No profile fallback is used. The viewer signs
+the unchanged Delete command, and the relay checks current authority again:
+the read is eligibility evidence, never a write grant or protection against races.
 Existing viewer-membership requirements remain; nonmember owner-agent access,
 owner-agent Archive authority and community-admin overrides are not added.
 Membership accepts NIP-29 `p` tags with optional relay and role fields
@@ -326,8 +335,9 @@ though Leave is forbidden, while an ordinary admin can Archive but not Delete.
 An admin/member who verifiably owns an owner-role agent can also Delete. Forbidden
 entries are omitted; failed checks offer retry and unsupported connections explain
 unavailability. DMs, sessions and read-only nonmember/cached views have no channel
-lifecycle entries. Archive status is not a blanket exclusion: an accessible
-archived channel can still be deleted by its verified direct owner.
+lifecycle entries. Archived channels cannot be deleted, by direct or agent owners:
+the relay rejects Delete while archived. An administrator must restore the channel
+through another supported client before deletion.
 These controls hand off to the same persistent sidebar confirmation/navigation
 owner, so confirmed removal can unmount Settings without cancelling completion.
 Cancellation returns focus to the originating Settings button (or the sidebar
@@ -342,8 +352,8 @@ requiring the channel name to be typed. Metadata and member-role editing remain
 separate.
 
 Each command has explicit confirmation. The lifecycle owner rechecks authority
-before signing and again before publication (including fresh owner-agent evidence
-for Delete), validates the returned command, and
+before signing and again before publication (including a fresh relay authority read
+for owner-agent Delete), validates the returned command, and
 confirms relay-owned state before removing a row. Archive retains membership;
 confirmed Delete/Leave use the existing access-loss purge. Commands use narrow
 development-broker routes, never the message outbox or automatic replay. Hosts

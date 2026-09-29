@@ -9,9 +9,7 @@ import {
   verifyEvent,
 } from "nostr-tools";
 import { writeFile } from "node:fs/promises";
-import { createHash, randomBytes } from "node:crypto";
-import { schnorr } from "@noble/curves/secp256k1.js";
-import { bytesToHex } from "nostr-tools/utils";
+import { randomBytes } from "node:crypto";
 import { platform, arch } from "node:os";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
@@ -170,27 +168,9 @@ export const test = base.extend({
     const servedProfiles = new Map();
     const ownerAgentKey = lifecycleOwnerAgent ? generateSecretKey() : undefined;
     const ownerAgent = ownerAgentKey ? getPublicKey(ownerAgentKey) : undefined;
+    // Persisted relay ownership is independent of a profile's current auth tag.
     const ownerAgentProfile = ownerAgentKey
-      ? sign(
-          0,
-          [
-            [
-              "auth",
-              viewer,
-              "",
-              bytesToHex(
-                schnorr.sign(
-                  createHash("sha256")
-                    .update(`nostr:agent-auth:${ownerAgent}:`)
-                    .digest(),
-                  userKey,
-                ),
-              ),
-            ],
-          ],
-          JSON.stringify({ name: "Owner Agent", is_agent: true }),
-          ownerAgentKey,
-        )
+      ? sign(0, [], JSON.stringify({ name: "Channel agent" }), ownerAgentKey)
       : undefined;
     const participants = largeSidebar
       ? Array.from({ length: 1001 }, (_, i) =>
@@ -799,6 +779,25 @@ export const test = base.extend({
               lifecycleTime,
             ),
           );
+      if (filter.channel_delete_authority === 1) {
+        expect(filter).toEqual({
+          kinds: [9008],
+          "#h": [expect.any(String)],
+          "#p": [viewer],
+          channel_delete_authority: 1,
+        });
+        return {
+          channel_delete_authority: 1,
+          community_id: communityIds[community],
+          pubkey: viewer,
+          channel_id: filter["#h"][0],
+          can_delete: Boolean(
+            ownerAgent &&
+              lifecycleRows.some((row) => row.id === filter["#h"][0]) &&
+              !archivedIds.has(filter["#h"][0]),
+          ),
+        };
+      }
       if (filter.kinds?.includes(30078)) {
         const events = [...readEvents.get(community).values()];
         if (readState && filter.read_state_snapshot === 1)
@@ -1249,23 +1248,27 @@ export const test = base.extend({
                 },
               }
             : {}),
-          ...(readState || savedSidebar
-            ? {
-                ...(readState
-                  ? {
-                      discovery: (community) => ({
-                        self: getPublicKey(relayKey),
-                        read_state_snapshot: {
-                          version: 1,
-                          community_id: communityIds[community],
-                          max_events: 4096,
-                          max_bytes: 8388608,
-                        },
-                      }),
-                    }
-                  : {}),
-              }
-            : {}),
+          discovery: (community) => ({
+            self: getPublicKey(relayKey),
+            ...(channelLifecycle
+              ? {
+                  channel_delete_authority: {
+                    version: 1,
+                    community_id: communityIds[community],
+                  },
+                }
+              : {}),
+            ...(readState
+              ? {
+                  read_state_snapshot: {
+                    version: 1,
+                    community_id: communityIds[community],
+                    max_events: 4096,
+                    max_bytes: 8388608,
+                  },
+                }
+              : {}),
+          }),
         })
       : undefined;
     const middleware = async (request, response, next) => {
@@ -1483,7 +1486,7 @@ export const test = base.extend({
                   communityAliases: fixtureAliases,
                   identity: () => userKey.slice(),
                   agentLibrary: () => ({ definitions: [], identities: [] }),
-                  ...(readState
+                  ...(readState || channelLifecycle
                     ? {}
                     : {
                         authority: async () => ({

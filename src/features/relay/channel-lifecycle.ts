@@ -1,5 +1,5 @@
 import { getEventHash } from "nostr-tools";
-import { authTagOwner } from "../agents/owner-attestation";
+import type { ChannelDeleteAuthority } from "./channel-delete-authority";
 import type { RelayReader } from "./reader";
 import type { RelayWriter } from "./transport";
 import { PublishRejected } from "./outbox";
@@ -49,6 +49,7 @@ export interface ChannelLifecycleCapability {
 export function createChannelLifecycle({
   reader,
   writer,
+  readDeleteAuthority,
   viewer,
   relayAuthor,
   canAccess,
@@ -57,6 +58,7 @@ export function createChannelLifecycle({
 }: {
   reader?: RelayReader | undefined;
   writer?: RelayWriter | undefined;
+  readDeleteAuthority?: ChannelDeleteAuthority | undefined;
   viewer: string;
   relayAuthor: string;
   canAccess(id: string): boolean;
@@ -131,47 +133,35 @@ export function createChannelLifecycle({
     const events = await read([39000, 39001, 39002], id, signal);
     assertAccess(id);
     const settings = lifecycleSettings(events, id, viewer, relayAuthor);
-    if (!reader || !checkOwnedAgent || settings.canDelete || settings.canHide)
+    const metadata = lifecycleRecord(events, 39000, id, relayAuthor);
+    if (
+      !reader ||
+      !checkOwnedAgent ||
+      settings.canDelete ||
+      settings.canHide ||
+      (metadata && exactLifecycleTag(metadata, "archived") === "true")
+    )
       return settings;
-    // lifecycleSettings validated the entire owner roster against membership.
-    const owners =
-      lifecycleRecord(events, 39001, id, relayAuthor)?.tags.flatMap(
-        ([name, pubkey, role]) =>
-          name === "p" && role === "owner" && pubkey ? [pubkey] : [],
-      ) ?? [];
-    for (let start = 0; start < owners.length; start += 4) {
-      const batch = owners.slice(start, start + 4);
-      const profiles = await reader.read(
-        batch.map((pubkey) => ({ kinds: [0], authors: [pubkey], limit: 1 })),
-        { signal, fresh: true, priority: "foreground" },
-      );
+    if (!readDeleteAuthority)
+      return Object.freeze({ ...settings, deleteUnavailable: "unsupported" });
+    const authoritySignal = AbortSignal.any([
+      signal,
+      AbortSignal.timeout(5000),
+    ]);
+    try {
+      const canDelete = await readDeleteAuthority(id, authoritySignal);
+      authoritySignal.throwIfAborted();
+      assertAccess(id);
+      return Object.freeze({ ...settings, canDelete });
+    } catch {
+      // An optional authority outage cannot erase independently verified actions.
+      // Cancellation/access loss, unlike that outage, still invalidates the whole read.
       signal.throwIfAborted();
       assertAccess(id);
-      if (
-        profiles.some(
-          (event) => event.kind !== 0 || !batch.includes(event.pubkey),
-        )
-      )
-        throw new Error("Unexpected channel owner profile response");
-      for (const pubkey of batch) {
-        const profile = profiles
-          .filter((event) => event.pubkey === pubkey)
-          .reduce<RelayEvent | undefined>(newer, undefined);
-        const [auth, ...extra] =
-          profile?.tags.filter(([name]) => name === "auth") ?? [];
-        // Verify target-bound ownership, never the profile's display owner field.
-        // This is ownership evidence, not delegation to sign the Delete command.
-        const owns =
-          auth &&
-          !extra.length &&
-          (await authTagOwner(pubkey, auth)) === viewer;
-        signal.throwIfAborted();
-        assertAccess(id);
-        if (owns) return Object.freeze({ ...settings, canDelete: true });
-      }
+      return Object.freeze({ ...settings, deleteUnavailable: "error" });
     }
-    return settings;
   }
+
   async function readVisibility(signal: AbortSignal) {
     const events = await read([DM_VISIBILITY_KIND], viewer, signal, true);
     const record = lifecycleRecord(
@@ -256,9 +246,11 @@ export function createChannelLifecycle({
             }[action];
             if (!permitted)
               throw new Error(
-                action === "leave" && settings.leaveReason
-                  ? settings.leaveReason
-                  : "This action is no longer permitted. Refresh channel permissions.",
+                action === "delete" && settings.deleteUnavailable
+                  ? "Delete permissions unavailable. Refresh channel permissions."
+                  : action === "leave" && settings.leaveReason
+                    ? settings.leaveReason
+                    : "This action is no longer permitted. Refresh channel permissions.",
               );
           };
           await authorize();
