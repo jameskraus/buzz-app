@@ -126,10 +126,12 @@ roster names the viewer an owner or admin (the same derivation the Invites
 settings card uses), and never in native builds, which cannot mint invites; it
 opens the Invites settings card scoped to that community. Community settings is
 on every community and opens Settings scoped to that community's origin, which
-selects it on the way. Opening a menu or running any item never acquires an
-inactive session, and the rail still claims no unread total: the unread
-capability provides bounded observed evidence, not exact community totals
-([unread ownership](unread.md)).
+selects it on the way. Closing a menu opened from the keyboard returns focus to
+that community; closing one opened by pointer restores whatever had focus
+before, so a right-click while typing does not move the caret to the rail.
+Opening a menu or running any item never acquires an inactive session, and the
+rail still claims no unread total: the unread capability provides bounded
+observed evidence, not exact community totals ([unread ownership](unread.md)).
 
 Visible copy uses Buzz, never “workspace.” The legacy `workspace` layout identifier
 and CSS variable are implementation details retained for plugin compatibility.

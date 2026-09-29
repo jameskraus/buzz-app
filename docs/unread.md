@@ -76,7 +76,9 @@ could hide unseen siblings. Oversized rows that never fit fully are not auto-rea
 - `markAllChannelsRead()` runs `markChannelRead` one channel at a time over the
   accessible listed channels that still show unread evidence or a local mark, so
   an already-read community costs no writes. One failing channel does not stop
-  the sweep; the first failure is rethrown afterwards. The community rail's
+  the sweep; the first failure is rethrown afterwards. A channel whose grant is
+  revoked before its turn is skipped, not failed; like a grant that arrives
+  mid-sweep, it waits for the next explicit action. The community rail's
   Mark all as read uses it for the selected community only.
 - `markUnreadLocal(target)` is durable **on this browser profile/device only**.
   Automatic reading does not clear it. An explicit mark-through clears that

@@ -1106,6 +1106,10 @@ export function createUnread({
       let failure: unknown;
       let failed = false;
       for (const channelId of pending) {
+        // A grant revoked while earlier channels were written is no failure of
+        // the sweep: like a grant that arrives mid-sweep, it waits for the next
+        // explicit action rather than surfacing as an error.
+        if (!allowed(channelId)) continue;
         try {
           results.push(await capability.markChannelRead(channelId));
         } catch (error) {

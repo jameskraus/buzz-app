@@ -38,6 +38,7 @@ function setup(
     alice = keypair();
   let journal: ReadJournal | undefined = preloaded?.(newReadJournal());
   let hold: Promise<void> | undefined;
+  let commitHold: Promise<void> | undefined;
   let started: (() => void) | undefined;
   let failNextSave = false;
   let failure: Error | undefined;
@@ -60,6 +61,11 @@ function setup(
         throw new Error("Storage update rejected");
       }
       journal = readJournal(change(journal), viewer.pubkey);
+      if (commitHold) {
+        const wait = commitHold;
+        commitHold = undefined;
+        await wait;
+      }
       return journal;
     },
     close() {},
@@ -137,6 +143,15 @@ function setup(
     holdSave() {
       let release = () => {};
       hold = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return release;
+    },
+    /** Holds the next save after its change is applied but before it resolves,
+     * like a storage transaction still committing when relay events arrive. */
+    holdCommit() {
+      let release = () => {};
+      commitHold = new Promise<void>((resolve) => {
         release = resolve;
       });
       return release;
@@ -1512,6 +1527,36 @@ it("mark all serialises channel reads over listed channels, skips read ones and 
   expect(
     unread.snapshot({ kind: "channel", channelId: second }).observedCount,
   ).toBe(0);
+});
+
+it("mark all skips a channel whose grant is revoked mid-sweep instead of failing", async () => {
+  const h = setup();
+  h.grant("room");
+  h.grant("other");
+  h.emit([
+    message(h.alice, "room", "one", 11),
+    message(h.alice, "other", "two", 12),
+  ]);
+  const cut = { room: 11, other: 12 };
+  const [first, second] = h.session.channels
+    .list()
+    .channels.map((channel) => channel.id)
+    .filter((id) => id in cut) as (keyof typeof cut)[];
+  assert(first && second);
+  // Let the initial journal save settle so the hold lands on the sweep's write.
+  await flush();
+  // The first channel's write is still committing when the second grant goes.
+  const release = h.holdCommit();
+  const sweep = h.session.unread.markAllChannelsRead();
+  await flush();
+  expect(h.journal()?.state.frontiers).toEqual({ [first]: cut[first] });
+  h.emit([roster(h.relay, second, [], 20)]);
+  release();
+  const results = await sweep;
+  expect(results).toHaveLength(1);
+  expect(results[0]?.durability).toBe("saved");
+  // The revoked channel earned neither a frontier nor a failure.
+  expect(h.journal()?.state.frontiers).toEqual({ [first]: cut[first] });
 });
 
 it("channel read clears local intent without fabricating a frontier when no messages are known", async () => {

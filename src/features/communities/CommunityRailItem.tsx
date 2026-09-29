@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useId,
   useRef,
   useState,
@@ -69,21 +70,38 @@ export function CommunityRailItem({
   onOpenTarget?: ((target: OpenTarget) => void) | undefined;
   onMenuOpen?: (() => void) | undefined;
 }) {
-  const [menu, setMenu] = useState<{ anchor?: HTMLElement } | null>(null);
+  // A keyboard open anchors to the rail item; a pointer open leaves the anchor
+  // to Base UI's cursor point.
+  const [menu, setMenu] = useState<{
+    anchor: HTMLElement | undefined;
+  } | null>(null);
   const button = useRef<HTMLButtonElement>(null);
   const navigated = useRef(false);
+  // Outlives `menu`, which is already null when the closing menu asks where
+  // focus should go.
+  const fromKeyboard = useRef(false);
+  useEffect(() => {
+    if (menu) fromKeyboard.current = menu.anchor !== undefined;
+  }, [menu]);
   const notify = useToastNotification();
   const { name } = membership;
   const origin = communityDestination(membership.id).url;
   const scope = viewer ? { viewer, communityOrigin: origin } : undefined;
+  /** Both entry points open here, so the roster refresh runs for each. */
+  const openMenu = (anchor?: HTMLElement) => {
+    navigated.current = false;
+    // Some browsers synthesise a contextmenu event for Shift+F10, which re-enters
+    // through Base UI while the keyboard open is in flight: the first anchor wins.
+    setMenu((current) => current ?? { anchor });
+    onMenuOpen?.();
+  };
   const openFromKeyboard = (event: KeyboardEvent<HTMLElement>) => {
     if (
       event.key === "ContextMenu" ||
       (event.shiftKey && event.key === "F10")
     ) {
       event.preventDefault();
-      navigated.current = false;
-      setMenu({ anchor: event.currentTarget });
+      openMenu(event.currentTarget);
     }
   };
   const open = (target: OpenTarget) => {
@@ -99,11 +117,8 @@ export function CommunityRailItem({
     <ContextMenuRoot
       open={menu !== null}
       onOpenChange={(next) => {
-        if (next) {
-          navigated.current = false;
-          setMenu({});
-          onMenuOpen?.();
-        } else setMenu(null);
+        if (next) openMenu();
+        else setMenu(null);
       }}
     >
       <ContextMenuTrigger
@@ -136,9 +151,16 @@ export function CommunityRailItem({
         side={menu?.anchor ? "right" : "bottom"}
         finalFocus={() => {
           // Opening Settings hands focus to the page, like the account menu does.
-          if (!navigated.current) return button.current ?? false;
-          const main = document.getElementById("main-content");
-          return main && !main.contains(document.activeElement) ? main : false;
+          if (navigated.current) {
+            const main = document.getElementById("main-content");
+            return main && !main.contains(document.activeElement)
+              ? main
+              : false;
+          }
+          // A keyboard open came from the rail, so focus goes back there. A
+          // pointer open may have interrupted typing elsewhere; Base UI's
+          // default restores whatever was focused before.
+          return fromKeyboard.current ? (button.current ?? false) : true;
         }}
       >
         <MarkAllReadItem

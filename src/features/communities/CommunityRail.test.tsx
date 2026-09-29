@@ -253,6 +253,8 @@ it.each(["ContextMenu", "F10"])(
       name: "Actions for Secondary",
     });
     expect(h.select).not.toHaveBeenCalled();
+    // Anchored beside the rail item, not at a cursor point.
+    expect(menu).toHaveAttribute("data-side", "right");
     await waitFor(() =>
       expect(menu.contains(document.activeElement)).toBe(true),
     );
@@ -261,6 +263,72 @@ it.each(["ContextMenu", "F10"])(
     await waitFor(() => expect(document.activeElement).toBe(target));
   },
 );
+
+it("keeps the keyboard anchor when a synthesised contextmenu event re-enters the open", async () => {
+  const h = harness();
+  render(
+    <CommunityRail communities={h.communities} onOpenTarget={h.onOpenTarget} />,
+  );
+  await waitFor(() => expect(h.read).toHaveBeenCalledTimes(1));
+  const target = button("Primary");
+  target.focus();
+  fireEvent.keyDown(target, { key: "F10", shiftKey: true });
+  const menu = await screen.findByRole("menu", { name: "Actions for Primary" });
+  await waitFor(() => expect(h.read).toHaveBeenCalledTimes(2));
+  expect(menu).toHaveAttribute("data-side", "right");
+  // Chromium and Firefox synthesise a contextmenu event for Shift+F10 unless the
+  // keydown is cancelled; Base UI turns it into a second open request. The
+  // roster re-read shows that request reached the rail item.
+  fireEvent.contextMenu(target, { clientX: 20, clientY: 20 });
+  await waitFor(() => expect(h.read).toHaveBeenCalledTimes(3));
+  await act(async () => {});
+  expect(menu).toHaveAttribute("data-side", "right");
+  fireEvent.keyDown(document.activeElement ?? menu, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+  await waitFor(() => expect(document.activeElement).toBe(target));
+});
+
+it("re-reads the roster for a keyboard open exactly as for a pointer open", async () => {
+  const h = harness();
+  render(
+    <CommunityRail communities={h.communities} onOpenTarget={h.onOpenTarget} />,
+  );
+  // The selected community's roster is read once on mount.
+  await waitFor(() => expect(h.read).toHaveBeenCalledTimes(1));
+  const target = button("Primary");
+  target.focus();
+  fireEvent.keyDown(target, { key: "F10", shiftKey: true });
+  const menu = await screen.findByRole("menu", { name: "Actions for Primary" });
+  await waitFor(() => expect(h.read).toHaveBeenCalledTimes(2));
+  await within(menu).findByRole("menuitem", { name: "Invite to community" });
+  fireEvent.keyDown(document.activeElement ?? menu, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+  await openMenu("Primary");
+  await waitFor(() => expect(h.read).toHaveBeenCalledTimes(3));
+});
+
+it("returns focus after a pointer open to where it was, not to the rail", async () => {
+  const user = userEvent.setup();
+  vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+  const h = harness();
+  render(
+    <>
+      <input aria-label="Composer" />
+      <CommunityRail communities={h.communities} />
+    </>,
+  );
+  const composer = screen.getByRole("textbox", { name: "Composer" });
+  composer.focus();
+  const menu = await openMenu("Primary");
+  expect(menu).toHaveAttribute("data-side", "bottom");
+  await user.click(
+    within(menu).getByRole("menuitem", { name: "Copy community URL" }),
+  );
+  await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+  // Right-clicking a community while typing must not move the caret to the rail.
+  await waitFor(() => expect(composer).toHaveFocus());
+  expect(button("Primary")).not.toHaveFocus();
+});
 
 it("copies the canonical community origin and reports the outcome", async () => {
   const user = userEvent.setup();
