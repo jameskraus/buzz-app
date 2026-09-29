@@ -60,9 +60,10 @@ export function AppShell({
     }
     setNavigationOpen(false);
   }, [navigationAttempt]);
+  // Only primary pages get a row; search below still lists every active page.
   const pageNavigation = (
     <nav aria-label="Pages" className="shell-pages">
-      {orderPages(pages).map((page) => {
+      {orderPages(pages.filter((page) => page.primary)).map((page) => {
         const { label, icon: Icon } = pagePresentation(page);
         return (
           <NavigationItem

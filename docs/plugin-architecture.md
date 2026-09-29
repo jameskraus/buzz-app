@@ -76,10 +76,12 @@ source imports are not a versioned external SDK. See
 ## Starting contracts
 
 A plugin exports `inject` and `apply(ctx)`. Pages register with
-`ctx.pages.register({ id, title, layout?, companion?, component })`. Panels register with
+`ctx.pages.register({ id, title, layout?, companion?, primary?, component })`. Panels register with
 `ctx.panels.register({ id, title, matches, launcher?, component })`. IDs are local to the
 plugin; the registry adds installation identity and revision and removes the
-contribution when its Cordis scope ends.
+contribution when its Cordis scope ends. `primary: true` gives a page a row in the
+shell's page navigation. Pages without it are still listed in search and reachable
+by deep link or from another page; Channels and Sessions are bundled examples.
 
 A page calls `panels.resolve(target)` and renders `PanelView` with the resulting
 contribution, the target string, and a close callback. The first active matcher

@@ -35,6 +35,20 @@ vi.mock("../bundled", async () => ({
       manifest: { id: "buzz.agents", name: "Agents", apiVersion: 1 },
       module: await import("../bundled/agents"),
     },
+    {
+      // A vended page without the primary flag: listed in search, no sidebar row.
+      manifest: { id: "fixture.notes", name: "Notes", apiVersion: 1 },
+      module: {
+        inject: ["pages"],
+        apply(ctx: import("@deepseek-ai/cordis").Context) {
+          ctx.pages.register({
+            id: "notes",
+            title: "Fixture notes",
+            component: () => null,
+          });
+        },
+      },
+    },
   ],
 }));
 const key = new Uint8Array(32).fill(6),
@@ -63,6 +77,7 @@ afterEach(async () => {
   agentFixture = undefined;
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+  Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
   localStorage.clear();
   window.history.replaceState(null, "", "/");
 });
@@ -237,7 +252,7 @@ it("reconnects a failed routed Agents edit from the shell and opens its exact ed
   expect(attempts).toBe(2);
 });
 
-it("lists only active plugin pages in the channel sidebar", async () => {
+it("lists only active primary pages in the channel sidebar", async () => {
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -246,6 +261,11 @@ it("lists only active plugin pages in the channel sidebar", async () => {
       disconnect() {}
     },
   );
+  // jsdom lacks scrollIntoView; the search palette scrolls its selection.
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    value: () => {},
+  });
   vi.stubEnv("VITE_BUZZ_LIVE", "1");
   vi.stubGlobal(
     "fetch",
@@ -267,6 +287,11 @@ it("lists only active plugin pages in the channel sidebar", async () => {
     ).toEqual(["Projects", "Agents"]),
   );
 
+  // The fixture page is active and searchable but never a sidebar row.
+  expect(current.pages.snapshot().map((page) => page.key)).toContain(
+    "fixture.notes/notes",
+  );
+
   await act(() => current.plugins.change("disable", "buzz.agents"));
   await waitFor(() =>
     expect(
@@ -275,4 +300,13 @@ it("lists only active plugin pages in the channel sidebar", async () => {
         .map((row) => row.textContent),
     ).toEqual(["Projects"]),
   );
+
+  await userEvent.click(screen.getByRole("button", { name: "Search Buzz" }));
+  const search = await screen.findByRole("dialog", { name: "Search Buzz" });
+  expect(
+    within(search).getByRole("option", { name: "Fixture notes" }),
+  ).toBeInTheDocument();
+  expect(
+    within(search).queryByRole("option", { name: "Agents" }),
+  ).not.toBeInTheDocument();
 });

@@ -2,9 +2,10 @@
 
 The shell is owned by `src/app/shell`, independently of relay operations and page
 content. `App.tsx` composes startup/recovery, built-in Settings, and the
-existing contributed-page lifecycle. Messages is the landing page; legacy Home
-targets resolve to Messages in the same visit. Channels is required, including
-when older preferences saved it disabled. Navigation removes disabled optional plugins
+existing contributed-page lifecycle. Messages is the default destination at
+startup; legacy Home targets resolve to Messages in the same visit. Channels is
+required, including when older preferences saved it disabled. Navigation removes
+disabled optional plugins
 from page choices; a retained destination whose provider is unavailable displays
 an explicit failure with retry instead of silently selecting another page.
 Browser controls, host shortcuts and toolbar arrows traverse the same visit history.
@@ -25,7 +26,11 @@ semantic tokens, UI authoring rules and the local component reference.
 - `src/app/shell/presentation.ts` owns page labels, icons and navigation ordering.
   Messages comes first, then Projects; other contributed pages follow by
   displayed label with a full contribution-key tie-breaker. Sidebar navigation and
-  page search share this policy, independent of plugin activation/re-enable order.
+  page search share this ordering, independent of plugin activation/re-enable order.
+  Sidebar navigation lists only pages registered with `primary: true` (Projects,
+  Agents and Workflows among the bundled plugins); page search lists every active
+  page. Channels and Sessions are vended without rows: Messages opens by default,
+  from any channel row and from search; Sessions opens from Messages and search.
   Channels is presented as Messages. Legacy tone props are retained for
   compatibility; all pages share the supplied gradient and repeating CSS dots.
   Add recognized page presentation here without changing plugin contracts.

@@ -30,13 +30,8 @@ const button = (page, name) => page.getByRole("button", { name, exact: true });
 const companionLauncher = (page, name) =>
   button(page, name).and(page.locator("button[aria-expanded]"));
 // The fixture's active plugin pages, in shell order, lead the channel sidebar.
-const destinationTitles = [
-  "Messages",
-  "Projects",
-  "Agents",
-  "Sessions",
-  "Workflows",
-];
+// Sidebar rows are the primary pages; Messages and Sessions stay in search only.
+const destinationTitles = ["Projects", "Agents", "Workflows"];
 const sidebarDestinations = (page, options = {}) =>
   page
     .getByRole("complementary", { name: "Channel sidebar", ...options })
@@ -976,9 +971,10 @@ test("Projects directory fits the workspace and page navigation survives plugin 
   await expectPageOrder(titles);
   await selectPage(page, "Projects");
   await expect(title).toBeVisible();
-  // The narrow drawer is closed here, but the sidebar keeps the same order.
+  // The narrow drawer is closed here, but the sidebar keeps the same order
+  // for its primary rows.
   await expect(sidebarDestinations(page, { includeHidden: true })).toHaveText(
-    titles,
+    destinationTitles,
   );
 });
 

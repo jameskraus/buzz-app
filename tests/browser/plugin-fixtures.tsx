@@ -130,6 +130,7 @@ export const fixturePlugins: readonly BundledPlugin[] = [
         ctx.pages.register({
           id: "pending",
           title: "Pending fixture",
+          primary: true,
           handlesNavigation: true,
           component: PendingDestination,
         });
@@ -161,6 +162,7 @@ export const fixturePlugins: readonly BundledPlugin[] = [
         ctx.pages.register({
           id: "session",
           title: "Session fixture",
+          primary: true,
           handlesNavigation: true,
           component: SessionPage,
         });
@@ -181,6 +183,7 @@ export const fixturePlugins: readonly BundledPlugin[] = [
         ctx.pages.register({
           id: "slow",
           title: "Delayed fixture",
+          primary: true,
           component: () => <p>Delayed destination presented</p>,
         });
       },
@@ -223,6 +226,7 @@ export const fixturePlugins: readonly BundledPlugin[] = [
         ctx.pages.register({
           id: "retry",
           title: "Retry fixture",
+          primary: true,
           component: RetryPage,
         });
       },
@@ -250,6 +254,7 @@ export const fixturePlugins: readonly BundledPlugin[] = [
         ctx.pages.register({
           id: "legacy",
           title: "Legacy",
+          primary: true,
           component: Legacy,
         });
       },

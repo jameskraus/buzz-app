@@ -6,6 +6,7 @@ export function apply(ctx) {
   ctx.pages.register({
     id: "main",
     title: "Notes playground",
+    primary: true,
     component: function Notes() {
       const [note, setNote] = React.useState("");
       return React.createElement(

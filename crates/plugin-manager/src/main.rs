@@ -164,7 +164,8 @@ export function apply(ctx: Context) {
   const React = ctx.react;
   // Plugin resources belong in ctx.effect(() => cleanup).
   // React effects belong to the visible page and stop when navigating away.
-  ctx.pages.register({ id: "main", title: "My page", component: function Page() {
+  // primary gives the page a sidebar row; every active page is still listed in search.
+  ctx.pages.register({ id: "main", title: "My page", primary: true, component: function Page() {
     const [count, setCount] = React.useState(0);
     return <section>
       <h1>My page</h1>

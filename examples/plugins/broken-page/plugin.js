@@ -4,6 +4,7 @@ export function apply(ctx) {
   ctx.pages.register({
     id: "broken",
     title: "Broken page",
+    primary: true,
     component: BrokenPage,
   });
 }

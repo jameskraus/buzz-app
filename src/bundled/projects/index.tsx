@@ -8,6 +8,7 @@ export const apply: PluginModule["apply"] = (ctx) => {
     id: "projects",
     title: "Projects",
     layout: "workspace",
+    primary: true,
     handlesNavigation: true,
     route: {
       version: 1,

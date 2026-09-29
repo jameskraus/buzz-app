@@ -19,6 +19,7 @@ export function apply(ctx) {
   ctx.pages.register({
     id: "main",
     title: "Shortcut counter",
+    primary: true,
     component: function ShortcutCounter() {
       const value = React.useSyncExternalStore(
         (listener) => {

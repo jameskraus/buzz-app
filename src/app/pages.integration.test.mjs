@@ -341,6 +341,7 @@ test("the app runtime exposes ready bundled pages and removes them on disable", 
     assert.equal(projects.title, "Projects");
     assert.equal(projects.layout, "workspace");
     assert.equal(projects.handlesNavigation, true);
+    assert.equal(projects.primary, true);
     assert.equal(projects.route.version, 1);
     assert.equal(
       projects.route.validate({

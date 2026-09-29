@@ -119,6 +119,7 @@ export function apply(ctx: Context) {
   ctx.pages.register({
     id: "main",
     title: "Test conversation consumer",
+    primary: true,
     component: function Consumer() {
       const connection = React.useSyncExternalStore(
         relay.subscribe,

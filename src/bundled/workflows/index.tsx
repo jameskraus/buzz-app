@@ -7,6 +7,7 @@ export const apply: PluginModule["apply"] = (ctx) => {
     id: "workflows",
     title: "Workflows",
     layout: "workspace",
+    primary: true,
     component: () => <WorkflowsPage relay={relay} />,
   });
 };

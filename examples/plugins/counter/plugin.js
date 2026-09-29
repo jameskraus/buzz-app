@@ -6,6 +6,7 @@ export function apply(ctx) {
   ctx.pages.register({
     id: "main",
     title: "Counter playground",
+    primary: true,
     component: function Counter() {
       const [count, setCount] = React.useState(0);
       return React.createElement(

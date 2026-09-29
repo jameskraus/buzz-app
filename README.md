@@ -159,7 +159,7 @@ Messages, choose a channel, and click a GitHub reference. See
 [the channel extension contract and data budgets](docs/channels.md) for ownership,
 performance, validation, and limitations.
 
-Messages is the landing page. Channels is required and cannot be disabled; optional plugins such as GitHub can be toggled in Settings.
+Messages opens by default. Channels is required and cannot be disabled; optional plugins such as GitHub can be toggled in Settings.
 
 See [client and community ownership](docs/communities.md) for the minimal join/profile flow, session scopes, and switching checks.
 
@@ -221,7 +221,8 @@ to exercise component reuse and contribution lifecycle.
 `apply(ctx)`. `ctx` is a Cordis context. External JSX plugins export
 `inject = ["react", "pages"]` and obtain `const React = ctx.react` inside `apply`, then call
 `ctx.pages.register({ id, title, component })` to contribute a page. A plugin may register
-several pages or none. Page IDs are unique within their plugin. Buzz supplies React
+several pages or none. Page IDs are unique within their plugin. Add `primary: true` for a
+row in the sidebar's page navigation; every active page is listed in search. Buzz supplies React
 and owns the Cordis runtime (`@deepseek-ai/cordis` 4.0.2). Import their types only
 in external plugins; runtime imports are rejected by the scaffold's builder.
 

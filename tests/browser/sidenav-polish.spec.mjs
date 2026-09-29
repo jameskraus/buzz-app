@@ -63,13 +63,9 @@ test("compact sidenav keeps its geometry across persistent page navigation", asy
     exact: true,
   });
   const pages = panel.getByRole("navigation", { name: "Pages" });
-  const destinations = [
-    "Messages",
-    "Projects",
-    "Agents",
-    "Sessions",
-    "Workflows",
-  ].map((name) => pages.getByRole("button", { name, exact: true }));
+  const destinations = ["Projects", "Agents", "Workflows"].map((name) =>
+    pages.getByRole("button", { name, exact: true }),
+  );
   const assertDestinationFillParity = async () => {
     const geometry = await Promise.all(
       destinations.map((destination) =>
@@ -400,7 +396,7 @@ fillSidebar(
     const list = page.getByRole("navigation", { name: "Subscribed channels" });
     const rows = {
       destination: sidebar.getByRole("button", {
-        name: "Messages",
+        name: "Projects",
         exact: true,
       }),
       channel: sidebar.getByRole("button", { name: "Beta", exact: true }),

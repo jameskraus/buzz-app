@@ -8,7 +8,12 @@ import styles from "./LinkLab.module.css";
 
 export const inject = ["pages"];
 export const apply: PluginModule["apply"] = (ctx) => {
-  ctx.pages.register({ id: "link-lab", title: "Link Lab", component: LinkLab });
+  ctx.pages.register({
+    id: "link-lab",
+    title: "Link Lab",
+    primary: true,
+    component: LinkLab,
+  });
 };
 
 const buzz = targetLink({ version: 1, kind: "home" });

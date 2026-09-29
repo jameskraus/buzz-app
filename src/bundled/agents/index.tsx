@@ -9,6 +9,7 @@ export const apply: PluginModule["apply"] = (ctx) => {
     id: "agents",
     title: "Agents",
     layout: "workspace",
+    primary: true,
     handlesNavigation: true,
     route: {
       version: 1,
