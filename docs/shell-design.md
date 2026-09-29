@@ -39,7 +39,7 @@ semantic tokens, UI authoring rules and the local component reference.
   Sidebar session state resets on scope/connection generation without remounting
   unrelated pages. Its own error boundary keeps page navigation and Settings usable.
   Page buttons use shared navigation rows and focus the main region on selection.
-  A scrollable page list leaves room for channels at short heights.
+  At short heights page rows scroll with the channel list rather than in their own list.
   At widths up to 650px, every page collapses navigation behind the header’s
   Show navigation button to preserve readable content at 200% text size. The
   220px disclosure overlays content, supports Escape, and keeps sidebar state

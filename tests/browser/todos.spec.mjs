@@ -1,4 +1,8 @@
-import { openPage, selectSettingsSection } from "./navigation.mjs";
+import {
+  openChannelPlaceholder,
+  openPage,
+  selectSettingsSection,
+} from "./navigation.mjs";
 import { npubEncode } from "nostr-tools/nip19";
 import { verifyEvent } from "nostr-tools";
 import { test, expect } from "./fixture.mjs";
@@ -156,9 +160,7 @@ test("opt-in Todos saves ordinary Canvas and disabling leaves it editable", asyn
   // to the same channel can reopen its Canvas-backed content with a live launcher.
   const sidebar = page.getByRole("complementary", { name: "Channel sidebar" });
   for (const destination of ["Inbox", "Bestie"]) {
-    await sidebar
-      .getByRole("button", { name: destination, exact: true })
-      .click();
+    await openChannelPlaceholder(page, destination);
     await expect(
       page.getByText("Content coming soon", { exact: true }),
     ).toBeVisible();

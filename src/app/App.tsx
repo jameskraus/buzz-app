@@ -88,7 +88,7 @@ function ConnectedApp({ services }: { services: AppServices }) {
     <ToastProvider>
       <ChannelNavigationProvider relay={services.relay}>
         <AppShell
-          sidebar={() =>
+          sidebar={(pageNavigation) =>
             settings ? (
               <SettingsSidebar
                 cards={services.settingsCards}
@@ -125,10 +125,9 @@ function ConnectedApp({ services }: { services: AppServices }) {
                 sessionsEnabled={route.pages.some(
                   (page) => page.pluginId === "buzz.sessions",
                 )}
-                agentsEnabled={route.pages.some(
-                  (page) => page.key === "buzz.agents/agents",
-                )}
-              />
+              >
+                {pageNavigation}
+              </ChannelSidebar>
             )
           }
           navigationControls={

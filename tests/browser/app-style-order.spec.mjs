@@ -7,8 +7,8 @@ test("app startup preserves shared shell control styling", async ({ page }) => {
   const destinations = page.getByRole("complementary", {
     name: "Channel sidebar",
   });
-  const inbox = destinations.getByRole("button", {
-    name: "Inbox",
+  const messages = destinations.getByRole("button", {
+    name: "Messages",
     exact: true,
   });
   const agents = destinations.getByRole("button", {
@@ -27,7 +27,7 @@ test("app startup preserves shared shell control styling", async ({ page }) => {
         await page
           .getByRole("button", { name: "Show navigation", exact: true })
           .click();
-      await expect(inbox).toHaveCSS("border-top-width", "0px");
+      await expect(messages).toHaveCSS("border-top-width", "0px");
       await expect(agents).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
       const controls = [
         page.getByRole("button", { name: "Go back", exact: true }),

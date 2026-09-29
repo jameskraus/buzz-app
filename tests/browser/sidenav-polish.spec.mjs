@@ -1,5 +1,6 @@
 import { test, expect } from "./fixture.mjs";
 import { open } from "./timeline.mjs";
+import { openChannelPlaceholder } from "./navigation.mjs";
 
 test.use({ savedSidebar: true });
 
@@ -61,9 +62,14 @@ test("compact sidenav keeps its geometry across persistent page navigation", asy
     name: "Channel sidebar",
     exact: true,
   });
-  const destinations = ["Inbox", "Bestie", "Agents"].map((name) =>
-    panel.getByRole("button", { name, exact: true }),
-  );
+  const pages = panel.getByRole("navigation", { name: "Pages" });
+  const destinations = [
+    "Messages",
+    "Projects",
+    "Agents",
+    "Sessions",
+    "Workflows",
+  ].map((name) => pages.getByRole("button", { name, exact: true }));
   const assertDestinationFillParity = async () => {
     const geometry = await Promise.all(
       destinations.map((destination) =>
@@ -211,24 +217,9 @@ test("compact sidenav keeps its geometry across persistent page navigation", asy
   await page
     .getByRole("button", { name: "Personal space", exact: true })
     .click();
-  for (const name of ["Inbox", "Bestie"]) {
-    const button = page
-      .getByRole("complementary", { name: "Channel sidebar", exact: true })
-      .getByRole("button", { name, exact: true });
-    await expect(button).toBeDisabled();
-    await button.hover();
-    await expect(button).toHaveCSS("cursor", "default");
-    await expect(button).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-    const unavailable = await button.evaluate((element) => {
-      const probe = document.createElement("span");
-      probe.style.color = "var(--text-unavailable)";
-      element.append(probe);
-      const color = getComputedStyle(probe).color;
-      probe.remove();
-      return color;
-    });
-    await expect(button).toHaveCSS("color", unavailable);
-  }
+  // Plugin pages do not need a community, so personal space keeps them enabled.
+  for (const destination of destinations)
+    await expect(destination).toBeEnabled();
 });
 
 // Browser layout and native disclosure behavior are not represented in jsdom.
@@ -316,21 +307,24 @@ test("placeholder destinations retain companion layout across navigation and res
     if (await show.isVisible()) await show.click();
     await sidebar.getByRole("button", { name, exact: true }).click();
   };
+  const openPlaceholder = async (name) => {
+    await openChannelPlaceholder(page, name);
+    await expect(
+      conversation.getByRole("heading", { name, exact: true }),
+    ).toBeVisible();
+  };
   for (const width of [1440, 900, 600]) {
     await page.setViewportSize({ width, height: 950 });
-    await selectChannel("Inbox");
+    await openPlaceholder("Inbox");
     await launcher.click();
     await checkGeometry(width <= 1000);
-    await selectChannel("Bestie");
-    await expect(
-      conversation.getByRole("heading", { name: "Bestie", exact: true }),
-    ).toBeVisible();
+    await openPlaceholder("Bestie");
     await checkGeometry(width <= 1000);
     await launcher.click();
     await expect(companion).not.toBeVisible();
     await selectChannel("Alpha");
     await launcher.click();
-    await selectChannel("Inbox");
+    await openPlaceholder("Inbox");
     await checkGeometry(width <= 1000);
     await launcher.click();
   }
@@ -405,7 +399,10 @@ fillSidebar(
     });
     const list = page.getByRole("navigation", { name: "Subscribed channels" });
     const rows = {
-      destination: sidebar.getByRole("button", { name: "Inbox", exact: true }),
+      destination: sidebar.getByRole("button", {
+        name: "Messages",
+        exact: true,
+      }),
       channel: sidebar.getByRole("button", { name: "Beta", exact: true }),
       dm: sidebar.getByRole("button", { name: "Alice Fixture", exact: true }),
       session: sidebar.getByRole("button", { name: /Alpha, session in/ }),

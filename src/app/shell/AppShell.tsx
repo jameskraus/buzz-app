@@ -76,7 +76,11 @@ export function AppShell({
             }}
             selected={selected === page.key}
             label={label}
-            icon={<Icon aria-hidden="true" size={20} />}
+            icon={
+              <span className="shell-page-icon">
+                <Icon aria-hidden="true" weight="bold" size={15} />
+              </span>
+            }
           />
         );
       })}

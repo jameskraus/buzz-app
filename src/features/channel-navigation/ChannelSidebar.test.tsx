@@ -136,8 +136,11 @@ function fixture(
           scope: { viewer: "viewer", communityOrigin: "https://relay.test" },
         }}
         sessionsEnabled={sessionsEnabled}
-        agentsEnabled={true}
-      />
+      >
+        <nav aria-label="Pages">
+          <button type="button">Projects</button>
+        </nav>
+      </ChannelSidebar>
     </ChannelNavigationProvider>
   );
   return { view, navigator, snapshot, list, session };
@@ -269,37 +272,17 @@ it("explains and disables unavailable move retries, then enables them after pref
   }
 });
 
-it.each(["connecting", "disconnected", "error"] as const)(
-  "explicitly disables Inbox and Bestie while the relay is %s",
+it.each(["ready", "connecting", "error"] as const)(
+  "keeps the supplied page navigation while the relay is %s",
   (status) => {
     const h = fixture(undefined, status);
     render(h.view("alpha"));
-    for (const name of ["Inbox", "Bestie"]) {
-      const button = screen.getByRole("button", { name });
-      expect(button).toBeDisabled();
-      fireEvent.click(button);
-    }
-    expect(h.navigator.open).not.toHaveBeenCalled();
+    const pages = screen.getByRole("navigation", { name: "Pages" });
+    expect(
+      within(pages).getByRole("button", { name: "Projects" }),
+    ).toBeVisible();
   },
 );
-
-it("opens Inbox and Bestie in the ready community", () => {
-  const h = fixture();
-  render(h.view("alpha"));
-  for (const name of ["Inbox", "Bestie"]) {
-    const button = screen.getByRole("button", { name });
-    expect(button).toBeEnabled();
-    fireEvent.click(button);
-    expect(h.navigator.open).toHaveBeenLastCalledWith({
-      version: 1,
-      kind: "page",
-      pluginId: "buzz.channels",
-      pageId: "channels",
-      scope: { viewer: "viewer", communityOrigin: "https://relay.test" },
-      route: { version: 1, params: name },
-    });
-  }
-});
 
 it("opens creation from a legacy subgroup + with that destination selected and retained in the create input", async () => {
   const preferences = createSidebarPreferencesStore(

@@ -197,12 +197,15 @@
     padding-left: var(--space-16);
   }
   .shell-pages {
-    @apply flex min-h-0 min-w-0 flex-col gap-1 overflow-y-auto;
-    max-height: 40dvh;
+    @apply flex min-w-0 flex-col gap-1;
   }
-  .shell-page-navigation-slot {
-    @apply flex min-h-0 shrink-0 flex-col mb-4;
-    max-height: 40%;
+  /* Matches the channel sidebar's icon box so page rows align with sections. */
+  .shell-page-icon {
+    display: inline-grid;
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    place-items: center;
   }
   .shell-navigation {
     display: contents;

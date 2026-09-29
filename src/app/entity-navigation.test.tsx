@@ -236,3 +236,43 @@ it("reconnects a failed routed Agents edit from the shell and opens its exact ed
   });
   expect(attempts).toBe(2);
 });
+
+it("lists only active plugin pages in the channel sidebar", async () => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  vi.stubEnv("VITE_BUZZ_LIVE", "1");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      if (url.endsWith("/identity")) return Response.json({ viewer });
+      if (url.endsWith("/query")) return Response.json([]);
+      return Response.json({});
+    }),
+  );
+  services = createServices();
+  const current = services;
+  render(<App services={current} />);
+  const pages = await screen.findByRole("navigation", { name: "Pages" });
+  await waitFor(() =>
+    expect(
+      within(pages)
+        .getAllByRole("button")
+        .map((row) => row.textContent),
+    ).toEqual(["Projects", "Agents"]),
+  );
+
+  await act(() => current.plugins.change("disable", "buzz.agents"));
+  await waitFor(() =>
+    expect(
+      within(screen.getByRole("navigation", { name: "Pages" }))
+        .getAllByRole("button")
+        .map((row) => row.textContent),
+    ).toEqual(["Projects"]),
+  );
+});
