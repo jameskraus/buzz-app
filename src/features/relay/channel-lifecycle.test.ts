@@ -855,6 +855,8 @@ describe("channel owner-agent Delete eligibility", () => {
         canDelete: false,
         deleteUnavailable: true,
       });
+      // A new attempt gets a new deadline, not the already-aborted test signal.
+      timeout.mockRestore();
       expect((await h.owner.capability.load(id)).canDelete).toBe(true);
     } finally {
       timeout.mockRestore();
