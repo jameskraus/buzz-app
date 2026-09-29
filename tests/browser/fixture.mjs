@@ -55,6 +55,7 @@ export const test = base.extend({
   largeSidebar: [false, { option: true }],
   iconCongestion: [false, { option: true }],
   dmLabels: [false, { option: true }],
+  agentPeers: [false, { option: true }],
   tallMessages: [false, { option: true }],
   membershipActivity: [false, { option: true }],
   historyCounts: [{ alpha: 1, beta: 1 }, { option: true }],
@@ -94,6 +95,7 @@ export const test = base.extend({
       largeSidebar,
       iconCongestion,
       dmLabels,
+      agentPeers,
       tallMessages,
       membershipActivity,
       historyCounts,
@@ -632,6 +634,7 @@ export const test = base.extend({
         sortingSidebar,
         initialSidebarSort,
         dmLabels,
+        agentPeers,
         tallMessages,
         browserVersion: browser.version(),
         node: process.version,
@@ -751,13 +754,18 @@ export const test = base.extend({
               ...(ownerAgent && lifecycleRows.some((row) => row.id === id)
                 ? [["p", ownerAgent, "", "owner"]]
                 : []),
-              ...(dmLabels && id === "dm-peer"
-                ? [["p", participants[0], "", "member"]]
-                : dmLabels && id === "dm-group"
-                  ? participants.map((pubkey) => ["p", pubkey, "", "member"])
-                  : participants
-                      .slice(dmIds.indexOf(id) * 8, (dmIds.indexOf(id) + 1) * 8)
-                      .map((pubkey) => ["p", pubkey, "", "member"])),
+              ...(agentPeers && channels.includes(id)
+                ? participants.map((pubkey) => ["p", pubkey, "", "member"])
+                : dmLabels && id === "dm-peer"
+                  ? [["p", participants[0], "", "member"]]
+                  : dmLabels && id === "dm-group"
+                    ? participants.map((pubkey) => ["p", pubkey, "", "member"])
+                    : participants
+                        .slice(
+                          dmIds.indexOf(id) * 8,
+                          (dmIds.indexOf(id) + 1) * 8,
+                        )
+                        .map((pubkey) => ["p", pubkey, "", "member"])),
             ]),
           );
       if (filter.kinds?.includes(39000))
@@ -781,7 +789,13 @@ export const test = base.extend({
                     (dmIds.includes(id) ? "dm" : "stream"),
                 ],
                 ...(archivedIds.has(id) ? [["archived", "true"]] : []),
-                ...(id === "open" ? [["public"]] : []),
+                // Ordinary channels are explicitly public; do not add a public
+                // flag to private sessions or change the separate DM fixtures.
+                ...(!sessionChannels.includes(id) &&
+                !dmIds.includes(id) &&
+                !lifecycleRows.some((row) => row.id === id && row.type === "dm")
+                  ? [["public"]]
+                  : []),
                 ...(dmIds.includes(id) ? [["hidden"]] : []),
                 ...(sessionChannels.includes(id)
                   ? [
@@ -918,6 +932,7 @@ export const test = base.extend({
                 0,
                 [],
                 JSON.stringify({
+                  ...(agentPeers && key !== peerKey ? { is_agent: true } : {}),
                   display_name: [
                     "Alice Fixture",
                     "Bob Fixture",

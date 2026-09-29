@@ -1,6 +1,7 @@
 import { Field } from "../../shared/design-system/ui/Field";
 import { Input } from "../../shared/design-system/ui/Input";
 import { Select } from "../../shared/design-system/ui/Select";
+import { Dialog } from "@base-ui/react/dialog";
 import { useCallback, useEffect, useRef, useState, type Ref } from "react";
 import type {
   AgentControl,
@@ -16,6 +17,11 @@ export function AgentImport({
   control,
   disabled,
   initialDestination = "",
+  initialSource = "installed",
+  selectedPubkey,
+  repairOnly = false,
+  selectedName = "agent",
+  onCancel,
   managedAgents,
   commitAvailable = true,
   onImported,
@@ -25,12 +31,17 @@ export function AgentImport({
   control: AgentControl;
   disabled: boolean;
   initialDestination?: string;
+  initialSource?: ImportSource;
+  selectedPubkey?: string | undefined;
+  repairOnly?: boolean;
+  selectedName?: string | undefined;
+  onCancel?: (() => void) | undefined;
   managedAgents: readonly AgentView[];
   commitAvailable?: boolean;
   onClone?: ((settings: CloneSettings) => void) | undefined;
   onImported?: (agents: AgentView[]) => void;
 }) {
-  const [source, setSource] = useState<ImportSource>("installed");
+  const [source, setSource] = useState<ImportSource>(initialSource);
   const [destination, setDestination] = useState(initialDestination);
   const [previewing, setPreviewing] = useState(false);
   const generation = useRef(0);
@@ -38,6 +49,7 @@ export function AgentImport({
   const [preview, setPreview] = useState<AgentImportPreview | null>(null);
   const [repaired, setRepaired] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [writeFailed, setWriteFailed] = useState(false);
   const invalidatePreview = () => {
     generation.current++;
     setPreview(null);
@@ -49,6 +61,7 @@ export function AgentImport({
       const current = ++generation.current;
       setPreview(null);
       setError(null);
+      setWriteFailed(false);
       setPreviewing(true);
       try {
         // A failed Start must not force a separate recovery ritual before browsing.
@@ -60,30 +73,33 @@ export function AgentImport({
       } catch {
         if (generation.current === current)
           setError(
-            "Could not load agents from old Buzz. Check Import options and try again.",
+            selectedPubkey
+              ? "We couldn’t load this agent from the source."
+              : "Could not load agents from old Buzz. Check Import options and try again.",
           );
       } finally {
         if (generation.current === current) setPreviewing(false);
       }
     },
-    [control],
+    [control, selectedPubkey],
   );
   useEffect(() => {
-    void load("installed", initialDestination);
+    void load(initialSource, initialDestination);
     return () => {
       generation.current++;
     };
-  }, [initialDestination, load]);
+  }, [initialDestination, initialSource, load]);
   // Native import rejects any key already held locally, in any community.
   const managedKeys = new Set(
     managedAgents.map((agent) => agent.pubkey.toLowerCase()),
   );
   const candidates = preview?.candidates.filter((candidate) => {
     const saved = managedAgents.find((agent) => agent.id === candidate.id);
-    // A saved agent reappears only to repair its missing team import.
+    if (selectedPubkey && candidate.pubkey !== selectedPubkey) return false;
+    // A saved agent reappears only in the list, to repair its missing team import.
     return saved
-      ? saved.needsTeamImport
-      : !managedKeys.has(candidate.pubkey.toLowerCase());
+      ? !selectedPubkey && saved.needsTeamImport
+      : !repairOnly && !managedKeys.has(candidate.pubkey.toLowerCase());
   });
   const commit = async (id: string, repair: boolean, name: string) => {
     if (disabled || importing || !destination.trim() || !preview?.token) return;
@@ -103,6 +119,7 @@ export function AgentImport({
     } catch (problem) {
       if (generation.current === current) {
         setPreview(null);
+        setWriteFailed(true);
         setError(
           problem instanceof Error && problem.message
             ? problem.message
@@ -113,6 +130,147 @@ export function AgentImport({
       if (generation.current === current) setImporting(false);
     }
   };
+  if (selectedPubkey) {
+    const candidate = candidates?.[0];
+    const problem =
+      error ??
+      (candidates?.length === 0
+        ? "This agent is unavailable in this source or is already imported."
+        : null);
+    return (
+      <>
+        <header className="buzz-dialog-header">
+          <Dialog.Title className="text-heading">
+            Import {selectedName}?
+          </Dialog.Title>
+        </header>
+        {problem ? (
+          <div className="flex flex-col items-start gap-2">
+            <p role="alert" className="m-0 text-body-sm">
+              {problem}
+            </p>
+            <Button
+              disabled={disabled || importing}
+              onClick={() => void load(source, destination)}
+            >
+              {writeFailed ? "Reload source" : "Retry"}
+            </Button>
+          </div>
+        ) : (
+          <Dialog.Description className="buzz-dialog-description">
+            This copies {selectedName}’s identity and settings to the
+            destination community. The agent will remain stopped.
+          </Dialog.Description>
+        )}
+        <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-body-sm">
+          <dt className="text-secondary">Source</dt>
+          <dd className="m-0">
+            {source === "installed" ? "Installed Buzz" : "Development Buzz"}
+          </dd>
+          <dt className="text-secondary">Destination</dt>
+          <dd className="m-0 break-all" title={destination}>
+            {initialDestination ? (
+              destination
+            ) : (
+              // Personal space has no selected community, so the user names one.
+              <form
+                className="flex flex-col items-start gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void load(source, destination);
+                }}
+              >
+                <Field label="Destination community">
+                  <Input
+                    required
+                    value={destination}
+                    placeholder="https://community.example"
+                    spellCheck={false}
+                    disabled={disabled || importing}
+                    onValueChange={(value) => {
+                      setDestination(value);
+                      invalidatePreview();
+                    }}
+                  />
+                </Field>
+                <Button
+                  type="submit"
+                  disabled={
+                    disabled || importing || previewing || !destination.trim()
+                  }
+                >
+                  Use destination
+                </Button>
+              </form>
+            )}
+          </dd>
+        </dl>
+        <p className="m-0 text-body-sm text-secondary">
+          Stop the agent in the old Buzz installation before starting it here.
+        </p>
+        {previewing && (
+          <p role="status" className="m-0 text-body-sm">
+            Loading agent…
+          </p>
+        )}
+        {!commitAvailable && !problem && (
+          <p role="status">Import is unavailable in this app session.</p>
+        )}
+        {problem && (
+          <details className="text-body-sm">
+            <summary className="cursor-pointer text-secondary">
+              Choose another source
+            </summary>
+            <label className="agent-control-field pt-3">
+              Source library
+              <select
+                value={source}
+                disabled={disabled || importing}
+                onChange={(event) => {
+                  const next = event.target.value as ImportSource;
+                  setSource(next);
+                  void load(next, destination);
+                }}
+              >
+                <option value="installed">Installed Buzz</option>
+                <option value="development">Development Buzz</option>
+              </select>
+            </label>
+            {preview && (
+              <div className="break-all text-secondary">
+                <p>{preview.sourcePath}</p>
+                {[...new Set(preview.warnings)].map((warning) => (
+                  <p key={warning}>{warning}</p>
+                ))}
+              </div>
+            )}
+          </details>
+        )}
+        <footer className="buzz-dialog-actions">
+          <Button disabled={disabled || importing} onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            disabled={
+              disabled ||
+              importing ||
+              previewing ||
+              !commitAvailable ||
+              !destination.trim() ||
+              !candidate ||
+              !preview?.token
+            }
+            onClick={() =>
+              candidate && void commit(candidate.id, false, candidate.name)
+            }
+          >
+            {importing ? "Importing…" : "Import agent"}
+          </Button>
+        </footer>
+      </>
+    );
+  }
   return (
     <section
       ref={ref}
@@ -160,9 +318,11 @@ export function AgentImport({
       )}
       {candidates?.length === 0 && (
         <p>
-          {destination
-            ? "No agents left to import or repair from this library for this community."
-            : "No agents in this local library."}
+          {selectedPubkey
+            ? "This identity is not available in the selected source, or is already imported. Choose another source in Import options."
+            : destination
+              ? "No agents left to import or repair from this library for this community."
+              : "No agents in this local library."}
         </p>
       )}
       {candidates?.map((candidate) => {
@@ -225,7 +385,10 @@ export function AgentImport({
           </div>
         );
       })}
-      <details open={!initialDestination || undefined} className="text-body-sm">
+      <details
+        open={!!selectedPubkey || !initialDestination || undefined}
+        className="text-body-sm"
+      >
         <summary className="cursor-pointer text-secondary">
           Import options
         </summary>

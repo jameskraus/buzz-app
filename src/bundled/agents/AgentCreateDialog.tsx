@@ -30,6 +30,7 @@ function newAgentDraft(state: AgentControlState): AgentDraft {
     revision: 0,
     name: "",
     systemPrompt: "",
+    sessionPolicy: null,
     workspace: state.data?.defaultWorkspace ?? "",
     command,
     args: JSON.stringify(chosen?.defaultArgs ?? []),

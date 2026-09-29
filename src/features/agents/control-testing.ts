@@ -8,6 +8,7 @@ export function controlFixture() {
     relayUrl: "wss://relay.example.test",
     name: "Fixture agent",
     systemPrompt: "Help with the project.",
+    sessionPolicy: null,
     workspace: "/fixture/workspace",
     harness: {
       command: "fixture-acp",

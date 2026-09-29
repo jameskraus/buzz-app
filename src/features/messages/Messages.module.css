@@ -568,6 +568,14 @@ html[data-keyboard-navigation] .attachmentImage:focus-visible {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--text) 20%, transparent) transparent;
 }
+.threadHistoryPageStatus {
+  padding: var(--space-2);
+  color: var(--text-subtle);
+  font-size: var(--text-caption);
+}
+.threadHistoryPageStatus p {
+  margin: 0;
+}
 .threadHistory ol {
   list-style: none;
   margin: 0;
@@ -2240,4 +2248,17 @@ html[data-keyboard-navigation] .rawDiff:focus-visible {
 }
 .text pre {
   text-wrap-style: auto;
+}
+
+.jumpToLatest {
+  position: sticky;
+  z-index: 2;
+  top: calc(100% - var(--size-control) - var(--space-2));
+  height: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+button[data-jump-to-latest] {
+  pointer-events: auto;
 }

@@ -10,9 +10,11 @@ import { AgentCard } from "./AgentCard";
 export function AgentLibrary({
   session,
   headerActions,
+  managedKeys = [],
 }: {
   session: RelaySession;
   headerActions: HTMLElement | null;
+  managedKeys?: readonly string[];
 }) {
   const resolveName = useIdentityNames(session.names);
   const library = session.agentLibrary;
@@ -37,7 +39,7 @@ export function AgentLibrary({
   }, [library, archives]);
   const { identities, profiles } = identityTiles(
     snapshot,
-    (key) => archives.state(key) === "archived",
+    (key) => managedKeys.includes(key) || archives.state(key) === "archived",
   );
   const candidates = identities.map((identity) => identity.pubkey);
   const identityLabel = (identity: { pubkey: string; name: string }) =>

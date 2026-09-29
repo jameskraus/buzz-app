@@ -34,6 +34,8 @@ fn agent(workspace: &Path) -> Agent {
         relay_url,
         name: "Test agent".into(),
         system_prompt: "test prompt".into(),
+        session_policy: None,
+        session_policy_inherit: false,
         workspace: workspace.display().to_string(),
         harness: HarnessEdit {
             databricks: None,
@@ -369,6 +371,7 @@ fn actual_spawn_save_restart_stop_and_restore_contract() {
         picture: None,
         name: "Edited".into(),
         system_prompt: "changed prompt".into(),
+        session_policy: Some(None),
         workspace: a.workspace.clone(),
         harness: a.harness.clone(),
         environment: BTreeMap::new(),
@@ -452,6 +455,7 @@ fn new_records_launch_preference_is_independent_of_start_and_stop() {
         name: a.name.clone(),
         picture: None,
         system_prompt: a.system_prompt.clone(),
+        session_policy: Some(None),
         workspace: a.workspace.clone(),
         harness: a.harness.clone(),
         environment: BTreeMap::new(),
@@ -996,6 +1000,7 @@ fn shared_cache_spawn_capture_disconnect_snapshot_and_private_temp_cleanup() {
         picture: None,
         name: a.name.clone(),
         system_prompt: a.system_prompt.clone(),
+        session_policy: Some(None),
         workspace: a.workspace.clone(),
         harness: HarnessEdit {
             databricks: Some(DatabricksSettings {
@@ -1266,6 +1271,7 @@ fn build_floor_agrees_at_command_oauth_and_discovery_without_rewriting_saved_age
     assert_eq!(env["BUZZ_AGENT_MODEL"], Some("build-model"));
     assert_eq!(env["BUZZ_ACP_MODEL"], Some("build-model"));
     assert_eq!(env["BUZZ_ACP_RESPOND_TO"], Some("owner-only"));
+    assert_eq!(env["BUZZ_ACP_SESSION_POLICY"], Some("channel"));
     assert_eq!(env["BUZZ_ACP_ALLOWED_RESPOND_TO"], Some("owner-only"));
     assert_eq!(
         env.get("BUZZ_ACP_RESPOND_TO_ALLOWLIST").copied().flatten(),
@@ -1286,6 +1292,11 @@ fn build_floor_agrees_at_command_oauth_and_discovery_without_rewriting_saved_age
     assert!(command
         .get_envs()
         .any(|(k, v)| k == "BUZZ_ACP_RESPOND_TO" && v == Some(std::ffi::OsStr::new("anyone"))));
+    agent.session_policy = Some(crate::config::SessionPolicy::Thread);
+    let command = bundle.command_with_defaults(&agent, &key, &public).unwrap();
+    assert!(command
+        .get_envs()
+        .any(|(k, v)| k == "BUZZ_ACP_SESSION_POLICY" && v == Some(std::ffi::OsStr::new("thread"))));
 }
 
 #[test]
@@ -1448,6 +1459,7 @@ fn goose_model_context_uses_effective_draft_provider_without_projecting_secrets(
         picture: None,
         name: "Goose".into(),
         system_prompt: String::new(),
+        session_policy: Some(None),
         workspace: dir.path().display().to_string(),
         harness: HarnessEdit {
             command: goose.display().to_string(),
@@ -1471,6 +1483,8 @@ fn goose_model_context_uses_effective_draft_provider_without_projecting_secrets(
     let context = Controller::draft_goose_model_context(edit(None)).unwrap();
     assert_eq!(context.command, goose);
     assert_eq!(context.provider_id, "databricks_v2");
+    assert_eq!(context.model_id, "effective-model");
+    assert_eq!(context.workspace, dir.path());
     assert!(context.model_overridden);
     assert_eq!(
         context.environment["DATABRICKS_HOST"],
@@ -1594,6 +1608,7 @@ fn pi_selection_and_extensions_survive_save_reopen_and_reach_adapter() {
         name: a.name.clone(),
         picture: None,
         system_prompt: a.system_prompt.clone(),
+        session_policy: Some(None),
         workspace: a.workspace.clone(),
         harness: a.harness.clone(),
         environment: BTreeMap::new(),
@@ -1966,6 +1981,7 @@ fn agent_value_beats_agent_default_which_beats_build_default() {
         provider: "databricks_v2".into(),
         model: "global-model".into(),
         effort: "medium".into(),
+        session_policy: crate::config::SessionPolicy::Channel,
         environment: BTreeMap::from([
             ("PROVIDER_TEST_SETTING".into(), "global-value".into()),
             ("GLOBAL_SETTING".into(), "global-value".into()),
@@ -2004,6 +2020,7 @@ fn inherited_default_changes_reach_restart_diff_and_the_next_start() {
         provider: String::new(),
         model: model.into(),
         effort: String::new(),
+        session_policy: Some(crate::config::SessionPolicy::Channel),
         environment: BTreeMap::new(),
     };
     controller.save_defaults(edit("first-default")).unwrap();
@@ -2066,6 +2083,7 @@ fn saved_databricks_workspace_launches_without_inheriting_global_host_or_restart
         provider: "databricks_v2".into(),
         model: String::new(),
         effort: String::new(),
+        session_policy: Some(crate::config::SessionPolicy::Channel),
         environment: BTreeMap::from([
             ("DATABRICKS_HOST".into(), Some(host.into())),
             ("DATABRICKS_MODEL_FILTER".into(), Some(filter.into())),

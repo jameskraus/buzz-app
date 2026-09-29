@@ -211,6 +211,42 @@ test("loaded virtual rows reveal per attempt without thread reads or live-update
     0,
   );
   await expect(thread(page)).toHaveCount(0);
+  // Successful exact navigation retains its target ID. Detach after reveal;
+  // live arrivals must count without treating that retained ID as pending.
+  await history.hover();
+  await page.mouse.wheel(0, -500);
+  await expect
+    .poll(() =>
+      history.evaluate(
+        (el) => el.scrollHeight - el.clientHeight - el.scrollTop,
+      ),
+    )
+    .toBeGreaterThan(80);
+  const first = app.append("primary", "alpha", "First detached arrival");
+  const jump = history.locator("button[data-jump-to-latest]");
+  await expect(jump).toHaveAccessibleName("1 new message");
+  await jump.focus();
+  await page.keyboard.press("Space");
+  await expect(history).toBeFocused();
+  await expect(
+    history.locator(`[data-message-id="${first.id}"]`),
+  ).toBeInViewport();
+  await history.hover();
+  await page.mouse.wheel(0, -500);
+  await expect
+    .poll(() =>
+      history.evaluate(
+        (el) => el.scrollHeight - el.clientHeight - el.scrollTop,
+      ),
+    )
+    .toBeGreaterThan(80);
+  app.append("primary", "alpha", "Second detached arrival");
+  await expect(jump).toHaveAccessibleName("1 new message");
+  await jump.focus();
+  await page.keyboard.press("Enter");
+  await expect(history).toBeFocused();
+  await expect(jump).toHaveCount(0);
+  await composer.focus();
   app.append("primary", "alpha", "Live after exact timeline reveal");
   await expect(history).toContainText("Live after exact timeline reveal");
   await expect(composer).toBeFocused();

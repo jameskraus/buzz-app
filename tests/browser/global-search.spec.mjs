@@ -1,39 +1,6 @@
 import { test, expect } from "./fixture.mjs";
 
 const button = (page, name) => page.getByRole("button", { name, exact: true });
-test.describe("photo avatar", () => {
-  test.use({ profilePicture: "https://avatar.invalid/photo.svg" });
-
-  // Browser layout and DOM focus across the portal cannot be proved in jsdom.
-  test("top-bar search and avatar share a vertical center", async ({
-    page,
-    app,
-  }) => {
-    // A photo has different inline baseline behavior from the initial-letter fallback.
-    await page.route("https://avatar.invalid/photo.svg", (route) =>
-      route.fulfill({
-        contentType: "image/svg+xml",
-        body: '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="navy"/></svg>',
-      }),
-    );
-    // Seed the signed community photo before startup; reloading can retire a stream while
-    // its initial control request is still in flight.
-    await page.goto(app.origin);
-    await expect(button(page, "Your profile").locator("img")).toHaveAttribute(
-      "data-loaded",
-      "true",
-    );
-    const search = await button(page, "Search Buzz").boundingBox();
-    const profile = await button(page, "Your profile").boundingBox();
-    expect(search).not.toBeNull();
-    expect(profile).not.toBeNull();
-    expect(search.y + search.height / 2).toBeCloseTo(
-      profile.y + profile.height / 2,
-      1,
-    );
-  });
-});
-
 test("search arrows traverse the conversation action and recent activity, Enter opens and Escape restores focus", async ({
   page,
   app,

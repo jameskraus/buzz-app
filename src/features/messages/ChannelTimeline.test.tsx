@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { ReactElement } from "react";
 import { Virtualizer } from "virtua";
 import { ChannelTimeline } from "./ChannelTimeline";
+import { JumpToLatestButton } from "./JumpToLatestButton";
 import { createAgentLibrary } from "../agents/library";
 import { createRelaySession } from "../relay/session";
 import {
@@ -204,6 +205,7 @@ function setup({
     clientHeight: 668,
     scrollHeight: 3706,
     scrollTop: 2388,
+    focus: vi.fn(),
     getBoundingClientRect: () => ({ top: 0 }),
     querySelector: () => list,
     querySelectorAll: () =>
@@ -424,6 +426,25 @@ function setup({
       rows = [...rows, timelineMessage("appended")];
       render();
     },
+    jumpToLatest() {
+      const button = section.props.children.find(
+        (child) =>
+          !!child &&
+          typeof child === "object" &&
+          "type" in child &&
+          child.type === JumpToLatestButton,
+      ) as ReactElement<{ onClick(): void }> | undefined;
+      button?.props.onClick();
+    },
+    hasJumpToLatest() {
+      return section.props.children.some(
+        (child) =>
+          !!child &&
+          typeof child === "object" &&
+          "type" in child &&
+          child.type === JumpToLatestButton,
+      );
+    },
     unmount() {
       for (const effect of hooks.effects) effect.cleanup?.();
     },
@@ -485,7 +506,15 @@ it("an append does not steal a reading position when virtualizer still reports b
   h.scroll();
   h.handle.scrollToIndex.mockClear();
   h.append();
+  h.render();
   expect(h.handle.scrollToIndex).not.toHaveBeenCalled();
+  expect(h.hasJumpToLatest()).toBe(true);
+  h.jumpToLatest();
+  expect(h.handle.scrollToIndex).toHaveBeenCalledExactlyOnceWith(2, {
+    align: "end",
+  });
+  h.render();
+  expect(h.hasJumpToLatest()).toBe(false);
   h.unmount();
 });
 it("loads older rows at the current DOM threshold despite a stale far-away virtualizer offset", () => {

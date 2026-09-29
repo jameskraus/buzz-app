@@ -14,6 +14,7 @@ import { assertSidebarSortIntent, mutateSidebarSort } from "./sidebar-sort.mjs";
 import { readProjectGit } from "./project-git.mjs";
 import { parseGitRead } from "../src/features/projects/git.ts";
 import { validateLifecycleTemplate } from "../src/features/relay/channel-lifecycle-protocol.ts";
+import { validateDetailsTemplate } from "../src/features/relay/channel-details-protocol.ts";
 import { validateArchiveRequestTemplate } from "../src/features/relay/identity-archive-protocol.ts";
 import {
   prepareChannelKit,
@@ -1425,6 +1426,7 @@ export function relayBrokerPlugin({
                 ...((await getAuthority(relay)).channelCreation ? [9007] : []),
               ],
               channelLifecycle: true,
+              channelDetails: true,
               identityArchives: true,
               workflowReads: true,
               projectGit: true,
@@ -1930,6 +1932,8 @@ export function relayBrokerPlugin({
               "/api/relay/presence-snapshot",
               "/api/relay/channel-activity",
               "/api/relay/sign",
+              "/api/relay/channel-details-sign",
+              "/api/relay/channel-details-publish",
               "/api/relay/channel-lifecycle-sign",
               "/api/relay/channel-lifecycle-publish",
               "/api/relay/identity-archive-sign",
@@ -2271,6 +2275,9 @@ export function relayBrokerPlugin({
               sent: false,
             });
           const timings = [];
+          const details =
+            route === "/api/relay/channel-details-sign" ||
+            route === "/api/relay/channel-details-publish";
           const lifecycle =
             route === "/api/relay/channel-lifecycle-sign" ||
             route === "/api/relay/channel-lifecycle-publish";
@@ -2279,10 +2286,12 @@ export function relayBrokerPlugin({
             route === "/api/relay/identity-archive-publish";
           const signing =
             route === "/api/relay/sign" ||
+            route === "/api/relay/channel-details-sign" ||
             route === "/api/relay/channel-lifecycle-sign" ||
             route === "/api/relay/identity-archive-sign";
           const publishing =
             route === "/api/relay/publish" ||
+            route === "/api/relay/channel-details-publish" ||
             route === "/api/relay/channel-lifecycle-publish" ||
             route === "/api/relay/identity-archive-publish";
           if (signing || publishing) {
@@ -2294,6 +2303,15 @@ export function relayBrokerPlugin({
               } catch {
                 return json(res, 400, {
                   error: "Invalid identity archive request",
+                  sent: false,
+                });
+              }
+            } else if (details) {
+              try {
+                validateDetailsTemplate(filters);
+              } catch {
+                return json(res, 400, {
+                  error: "Invalid channel details command",
                   sent: false,
                 });
               }

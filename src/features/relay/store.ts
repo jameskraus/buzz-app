@@ -200,6 +200,8 @@ export function createChannelStore(
       const old = previous.get(channel.id);
       return old &&
         old.name === channel.name &&
+        old.description === channel.description &&
+        old.visibility === channel.visibility &&
         old.preview === preview &&
         old.hidden === channel.hidden &&
         old.private === channel.private &&

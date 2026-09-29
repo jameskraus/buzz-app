@@ -417,6 +417,13 @@ it("profile activity opens the exact agent and originating channel before its fi
     .getByRole("button", { name: "Channel settings", exact: true })
     .click();
   await expect(
+    page
+      .getByRole("region", { name: "Edit channel details", exact: true })
+      .getByText(
+        "Only current channel owners and admins can edit these details.",
+      ),
+  ).toBeVisible();
+  await expect(
     page.getByRole("button", { name: "Leave channel", exact: true }),
   ).toBeVisible();
   await page.getByText("Diagnostics", { exact: true }).click();

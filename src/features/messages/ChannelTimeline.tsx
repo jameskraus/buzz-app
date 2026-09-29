@@ -19,6 +19,7 @@ import { useMessageReveal } from "./use-message-reveal";
 import type { PageNavigation } from "../navigation/service";
 import { messageViewKey } from "./view-key";
 import { useKnownAgentPubkeys } from "../agents/use-known";
+import { JumpToLatestButton } from "./JumpToLatestButton";
 
 const EDGE_HEIGHT = 56;
 type ReadingPosition = {
@@ -163,7 +164,8 @@ function Timeline({
   const edges = useRef<{
     first?: string | undefined;
     last?: string | undefined;
-  }>({});
+    ids: ReadonlySet<string>;
+  }>({ ids: new Set() });
   const intent = useRef(0);
   const measuredPosition = useRef<{
     offset: number;
@@ -175,6 +177,8 @@ function Timeline({
   const settled = useRef(false),
     userScrolled = useRef(false),
     follow = useRef(true);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const [newMessageCount, setNewMessageCount] = useState(0);
   const recordPosition = useCallback(
     (element: HTMLElement) => {
       // A delayed membership event can replace a group's rendered representative.
@@ -214,6 +218,25 @@ function Timeline({
     },
     [rows],
   );
+  const updateJumpToLatest = useCallback((element: HTMLElement) => {
+    const bottom =
+      element.scrollHeight - element.clientHeight - element.scrollTop < 80;
+    setShowJumpToLatest(!bottom);
+    if (bottom) setNewMessageCount(0);
+  }, []);
+  const jumpToLatest = useCallback(() => {
+    if (!handle.current || !rows.length) return;
+    intent.current++;
+    follow.current = true;
+    restoredAnchor.current = undefined;
+    userScrolled.current = false;
+    scroller.current?.focus({ preventScroll: true });
+    setShowJumpToLatest(false);
+    setNewMessageCount(0);
+    handle.current.scrollToIndex(rows.length - 1, {
+      align: "end",
+    });
+  }, [rows.length]);
   const targetId =
     navigation?.target.kind === "conversation"
       ? navigation.target.messageId
@@ -286,7 +309,23 @@ function Timeline({
   useLayoutEffect(() => {
     // Row updates include edits/reactions/replies, not only new message IDs.
     // Above-bottom reading and prepend anchoring remain Virtua's responsibility.
-    edges.current = { first: rows[0]?.id, last: rows.at(-1)?.id };
+    const previousIds = edges.current.ids;
+    const arrivals = prepend
+      ? 0
+      : rows.filter((row) => !previousIds.has(row.id)).length;
+    edges.current = {
+      first: rows[0]?.id,
+      last: rows.at(-1)?.id,
+      ids: new Set(rows.map((row) => row.id)),
+    };
+    if (
+      arrivals > 0 &&
+      previousIds.size > 0 &&
+      !follow.current &&
+      (!targetId || exactRevealed.current === navigation?.signal)
+    ) {
+      setNewMessageCount((count) => count + arrivals);
+    }
     if (
       (targetId && navigation && exactRevealed.current !== navigation.signal) ||
       !size.width ||
@@ -367,6 +406,7 @@ function Timeline({
         }
       }
       settled.current = true;
+      if (scroller.current) updateJumpToLatest(scroller.current);
     });
     return () => {
       cancelAnimationFrame(frame);
@@ -393,6 +433,7 @@ function Timeline({
     targetId,
     navigation,
     exactRevealed,
+    updateJumpToLatest,
   ]);
   const revealed = useRef<string | undefined>(undefined);
   useLayoutEffect(() => {
@@ -495,6 +536,7 @@ function Timeline({
           element.clientHeight === size.height
         ) {
           recordPosition(element);
+          updateJumpToLatest(element);
         }
         loadNearTop(element);
       }}
@@ -518,6 +560,12 @@ function Timeline({
           </Button>
         ) : null}
       </div>
+      {showJumpToLatest && (
+        <JumpToLatestButton
+          newMessageCount={newMessageCount}
+          onClick={jumpToLatest}
+        />
+      )}
       {width > 0 && (
         <Virtualizer
           ref={handle}

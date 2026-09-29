@@ -197,8 +197,22 @@ test("local controls preserve drafts, confirm operations and distinguish disable
       ),
     ).toEqual([]);
     await panel.getByRole("button", { name: "Import Fixture agent" }).click();
-    // Only the two managed identities belong here, not the library template.
-    await expect(panel.getByRole("article")).toHaveCount(2);
+    // Only the two managed identities have controls; the template stays read-only.
+    await expect(
+      panel.getByRole("article").filter({
+        has: page.getByRole("button", { name: /^Actions for / }),
+      }),
+    ).toHaveCount(2);
+    await expect(
+      panel
+        .getByRole("region", { name: "Library identities", exact: true })
+        .getByRole("article"),
+    ).toHaveCount(0);
+    await expect(
+      panel
+        .getByRole("region", { name: "Profiles without identities" })
+        .getByRole("article", { name: "Agent Library only", exact: true }),
+    ).toBeVisible();
     expect(
       await page.evaluate(() =>
         window.agentControlFixture.data.agents.every((a) => !a.enabled),

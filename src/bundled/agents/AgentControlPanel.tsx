@@ -1,3 +1,4 @@
+import { Dialog } from "@base-ui/react/dialog";
 import type { useIdentityNames } from "../../features/identity-names/react";
 import {
   useAgentControl,
@@ -11,12 +12,15 @@ import type {
   AgentControlState,
   AgentView,
   CloneSettings,
+  ImportSource,
 } from "../../features/agents/control";
 import { PlusIcon } from "../../shared/design-system/icons/index";
 import { Button } from "../../shared/design-system/ui/Button";
 import { Accordion } from "../../shared/design-system/ui/Accordion";
 import { AgentCard } from "./AgentCard";
 import { AgentEditor } from "./AgentEditor";
+import { LocalInventoryAction } from "./LocalInventoryAction";
+import { relayOrigin } from "../../features/communities/destination";
 import { AgentImport } from "./AgentImport";
 import { AgentCreateDialog } from "./AgentCreateDialog";
 import { AgentDeleteDialog } from "./AgentDeleteDialog";
@@ -49,6 +53,8 @@ export function AgentControlPanel({
     remove: (agent: AgentView) => void,
     importedId: string | null,
     label: (agent: AgentView) => string,
+    onUseHere: (pubkey: string) => void,
+    onImport: (pubkey: string, source?: ImportSource) => void,
   ) => ReactNode;
 }) {
   const [adding, setAdding] = useState<{
@@ -57,6 +63,29 @@ export function AgentControlPanel({
     source?: AgentView;
     initialSettings?: CloneSettings;
   } | null>(null);
+  const [localPending, setLocalPending] = useState(false);
+  const [handover, setHandover] = useState<{
+    pubkey: string;
+    destination: string;
+  } | null>(null);
+  useEffect(() => {
+    // A handover belongs to the community in which its action was selected.
+    setHandover((current) =>
+      current?.destination === importDestination ? current : null,
+    );
+  }, [importDestination]);
+  const [importSelection, setImportSelection] = useState<{
+    destination: string;
+    trigger: HTMLElement | null;
+    pubkey: string;
+    name: string;
+    source?: ImportSource;
+  } | null>(null);
+  useEffect(() => {
+    setImportSelection((current) =>
+      current?.destination === importDestination ? current : null,
+    );
+  }, [importDestination]);
   const [importSections, setImportSections] = useState<string[]>([]);
   const [importedId, setImportedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<{
@@ -76,7 +105,10 @@ export function AgentControlPanel({
     });
   const remove = (agent: AgentView) => setDeleting(agent.id);
   useAgentControlRefresh(control);
-  const state = useAgentControl(control);
+  const nativeState = useAgentControl(control);
+  const state = localPending
+    ? { ...nativeState, busy: true, pendingCredentialWrite: true }
+    : nativeState;
   useEffect(() => {
     if (
       state.data?.agents.some(
@@ -99,6 +131,16 @@ export function AgentControlPanel({
       ...facts,
       { pubkey: agent.pubkey, name: agent.name, isAgent: true },
     ]) ?? agent.name;
+  const localSource =
+    handover &&
+    (state.data?.agents.find(
+      (agent) =>
+        agent.pubkey === handover.pubkey &&
+        !!agent.relayUrl &&
+        !!handover.destination &&
+        relayOrigin(agent.relayUrl) === relayOrigin(handover.destination),
+    ) ??
+      state.data?.agents.find((agent) => agent.pubkey === handover.pubkey));
   // Route selection takes precedence over card-local editing. Never guess among
   // multiple native records for the same public identity in this community.
   const routed =
@@ -130,6 +172,44 @@ export function AgentControlPanel({
     }
   }, [editRequest, editing, state.status]);
   const deletion = state.data?.agents.find((agent) => agent.id === deleting);
+  const needsRepair = !!state.data?.agents.some(
+    (agent) => agent.needsTeamImport,
+  );
+  const importForm = state.data ? (
+    <AgentImport
+      // The inventory owns ordinary imports; this list only repairs team imports.
+      repairOnly={state.data.parked !== undefined && !importSelection}
+      key={`${importDestination}:${importSelection?.pubkey}:${importSelection?.source}`}
+      control={control}
+      initialSource={importSelection?.source ?? "installed"}
+      selectedPubkey={importSelection?.pubkey}
+      selectedName={importSelection?.name}
+      onCancel={() => setImportSelection(null)}
+      initialDestination={importDestination}
+      managedAgents={state.data.agents}
+      commitAvailable={
+        state.status === "ready" && state.data.importAvailable !== false
+      }
+      disabled={state.busy}
+      onClone={
+        control.cloneSettings && createOwner && importDestination
+          ? (initialSettings) => {
+              setImportSelection(null);
+              setAdding({
+                destination: importDestination,
+                owner: createOwner,
+                initialSettings,
+              });
+            }
+          : undefined
+      }
+      onImported={(agents) => {
+        setImportedId(agents[0]?.id ?? null);
+        setImportSections([]);
+        setImportSelection(null);
+      }}
+    />
+  ) : null;
   return (
     <section
       data-buzz-ui=""
@@ -141,6 +221,7 @@ export function AgentControlPanel({
           <Button
             variant="primary"
             aria-haspopup="dialog"
+            disabled={localPending}
             onClick={() =>
               setAdding({
                 destination: importDestination,
@@ -169,9 +250,32 @@ export function AgentControlPanel({
       {state.status === "error" && (
         <Button onClick={() => void control.refresh()}>Retry status</Button>
       )}
-      {state.busy && <p role="status">Waiting for the host to confirm…</p>}
+      {state.busy && <p role="status">Waiting for the desktop app…</p>}
       {children ? (
-        children(state, edit, duplicate, remove, importedId, label)
+        children(
+          state,
+          edit,
+          duplicate,
+          remove,
+          importedId,
+          label,
+          (pubkey) => setHandover({ pubkey, destination: importDestination }),
+          (pubkey, source) => {
+            setImportSelection({
+              destination: importDestination,
+              trigger:
+                document.activeElement instanceof HTMLElement
+                  ? document.activeElement
+                  : null,
+              pubkey,
+              name:
+                state.data?.parked?.find((agent) => agent.pubkey === pubkey)
+                  ?.name ?? "agent",
+              ...(source ? { source } : {}),
+            });
+            setImportSections(["old-buzz"]);
+          },
+        )
       ) : (
         <div className="agent-grid">
           {state.data?.agents.map((agent) => (
@@ -187,49 +291,102 @@ export function AgentControlPanel({
           ))}
         </div>
       )}
-      {state.data && (
-        <Accordion
-          variant="activity"
-          value={importSections}
-          onValueChange={setImportSections}
-          items={[
-            {
-              value: "old-buzz",
-              title: state.data.agents.some((agent) => agent.needsTeamImport)
-                ? "Import or repair from another installation"
-                : "Import from another installation",
-              content: importSections.includes("old-buzz") ? (
-                <AgentImport
-                  key={importDestination}
-                  control={control}
-                  initialDestination={importDestination}
-                  managedAgents={state.data.agents}
-                  commitAvailable={
-                    state.status === "ready" &&
-                    state.data.importAvailable !== false
-                  }
-                  onClone={
-                    control.cloneSettings && createOwner && importDestination
-                      ? (initialSettings) => {
-                          setImportSections([]);
-                          setAdding({
-                            destination: importDestination,
-                            owner: createOwner,
-                            initialSettings,
-                          });
-                        }
-                      : undefined
-                  }
-                  disabled={state.busy}
-                  onImported={(agents) => {
-                    setImportedId(agents[0]?.id ?? null);
-                    setImportSections([]);
-                  }}
+      {state.data &&
+        !importSelection &&
+        (state.data.parked === undefined || needsRepair) && (
+          <Accordion
+            variant="activity"
+            value={importSections}
+            onValueChange={setImportSections}
+            items={[
+              {
+                value: "old-buzz",
+                title:
+                  state.data.parked !== undefined
+                    ? "Repair team import from another installation"
+                    : needsRepair
+                      ? "Import or repair from another installation"
+                      : "Import from another installation",
+                content: importSections.includes("old-buzz")
+                  ? importForm
+                  : null,
+              },
+            ]}
+          />
+        )}
+      {state.data?.parked !== undefined &&
+        importSelection &&
+        importSelection.destination === importDestination && (
+          <Dialog.Root
+            open
+            modal={!state.pendingCredentialWrite}
+            disablePointerDismissal
+            onOpenChange={(open, details) => {
+              if (!open && state.busy) details.cancel();
+              else if (!open) setImportSelection(null);
+            }}
+          >
+            <Dialog.Portal>
+              {!state.pendingCredentialWrite && (
+                <Dialog.Backdrop
+                  data-buzz-ui=""
+                  className="buzz-dialog-backdrop"
                 />
-              ) : null,
-            },
-          ]}
-        />
+              )}
+              <Dialog.Popup
+                data-buzz-ui=""
+                className="buzz-dialog agent-controls text-body"
+                finalFocus={() => importSelection.trigger}
+                aria-modal={!state.pendingCredentialWrite}
+              >
+                {importForm}
+              </Dialog.Popup>
+            </Dialog.Portal>
+          </Dialog.Root>
+        )}
+      {state.data && handover && handover.destination === importDestination && (
+        <Dialog.Root
+          open
+          modal={false}
+          onOpenChange={(open) => {
+            if (!open && !state.busy) setHandover(null);
+          }}
+        >
+          <Dialog.Portal>
+            <Dialog.Popup
+              data-buzz-ui=""
+              className="buzz-dialog agent-controls agent-dialog text-body"
+            >
+              <Dialog.Title className="text-heading">
+                Set up agent here
+              </Dialog.Title>
+              <Dialog.Description className="text-body-sm text-secondary">
+                Set up the imported agent in this community. It will not start
+                yet.
+              </Dialog.Description>
+              {localSource && state.data.localInventoryActions ? (
+                <LocalInventoryAction
+                  key={`${handover.pubkey}:${handover.destination}:${createOwner}`}
+                  control={control}
+                  agent={localSource || undefined}
+                  destination={handover.destination}
+                  owner={createOwner ?? ""}
+                  disabled={nativeState.busy || state.status !== "ready"}
+                  onPending={setLocalPending}
+                  onUsed={() => setHandover(null)}
+                />
+              ) : (
+                <p>
+                  This app cannot set up this agent yet. Import it first. If it
+                  is already imported, update and restart the desktop app.
+                </p>
+              )}
+              <Button disabled={state.busy} onClick={() => setHandover(null)}>
+                Close
+              </Button>
+            </Dialog.Popup>
+          </Dialog.Portal>
+        </Dialog.Root>
       )}
       {adding && (
         <AgentCreateDialog

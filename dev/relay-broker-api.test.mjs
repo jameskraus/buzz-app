@@ -2728,3 +2728,63 @@ test("community setup signs explicit owner intent without inventory or enrollmen
     await h.close();
   }
 });
+
+test("details routes are narrow, require the live owner, and do not widen lifecycle/outbox", async () => {
+  const h = await harness(success);
+  let live;
+  try {
+    const transport = await connectBrokerTransport(h.base);
+    const template = {
+      kind: 9002,
+      created_at: 1700000000,
+      content: "",
+      tags: [
+        ["h", "11111111-1111-4111-8111-111111111111"],
+        ["name", "renamed"],
+        ["about", ""],
+        ["visibility", "private"],
+      ],
+    };
+    expect(transport.writer.kinds).not.toContain(9002);
+    expect((await h.post("sign", template)).status).toBe(400);
+    expect((await h.post("channel-lifecycle-sign", template)).status).toBe(400);
+    for (const invalid of [
+      { ...template, kind: 9001 },
+      { ...template, content: "extra" },
+      { ...template, tags: [...template.tags, ["archived", "true"]] },
+      {
+        ...template,
+        tags: [...template.tags.slice(0, 3), ["visibility", "open"]],
+      },
+      { ...template, tags: [template.tags[0], ["topic", "x"]] },
+      {
+        ...template,
+        tags: [template.tags[0], ["name", "n"], ["about", "x".repeat(1001)]],
+      },
+    ]) {
+      for (const route of ["channel-details-sign", "channel-details-publish"])
+        expect((await h.post(route, invalid)).status).toBe(400);
+    }
+    const signal = new AbortController().signal;
+    const event = await transport.channelDetails.sign(template, signal);
+    expect(verifyEvent(event)).toBe(true);
+    expect(event).toMatchObject(template);
+    expect((await h.post("publish", event)).status).toBe(400);
+    await expect(
+      transport.channelDetails.publish(event, signal),
+    ).rejects.toBeInstanceOf(PublishRejected);
+    expect(h.publications).toHaveLength(0);
+    live = await openBrokerSocket(transport);
+    await transport.channelDetails.publish(event, signal);
+    expect(h.publications).toHaveLength(1);
+    const foreign = finalizeEvent(
+      structuredClone(template),
+      new Uint8Array(32).fill(5),
+    );
+    expect((await h.post("channel-details-publish", foreign)).status).toBe(400);
+    expect(h.publications).toHaveLength(1);
+  } finally {
+    live?.dispose();
+    await h.close();
+  }
+});

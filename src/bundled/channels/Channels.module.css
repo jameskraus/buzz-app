@@ -682,14 +682,13 @@
   letter-spacing: var(--text-caption--letter-spacing);
 }
 .activityList {
+  /* Follow the popup's inner curve after its list inset and 1px border. */
+  --radius-row: calc(var(--radius-panel) - var(--space-1) - 1px);
   max-height: 360px;
   overflow-y: auto;
 }
 .activityItem {
   width: 100%;
-}
-.activityItem + .activityItem {
-  border-top: 1px solid var(--border-standard);
 }
 .activityAvatar {
   width: 30px;
@@ -857,4 +856,20 @@
 .sectionSortAction {
   flex-shrink: 0;
   margin-block: calc(-1 * var(--space-1));
+}
+
+.settingsDescription {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.detailsEditor {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.detailsLabel {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
 }

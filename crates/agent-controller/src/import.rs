@@ -427,6 +427,8 @@ fn resolve(data: &Source, record: &Value, workspace: &Path, destination: &str) -
         relay_url,
         name: string(record, "name").into(),
         system_prompt: string(definition, "system_prompt").into(),
+        session_policy: None,
+        session_policy_inherit: false,
         workspace: workspace.display().to_string(),
         harness: HarnessEdit {
             databricks: None,

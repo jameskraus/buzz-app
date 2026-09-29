@@ -382,6 +382,85 @@ saved/default conversation selection, including after reload. Retained archived 
 hidden membership cannot reopen itself through that destination; intentional exact
 navigation to a hidden DM remains supported.
 
+## Editing channel details
+
+Channel Settings shows the signed name, description and explicit visibility for
+ordinary channels; missing visibility stays **Not available**, not implicitly
+Public. **Edit details** opens the shared Dialog with one Name/Description/Visibility
+draft. Selecting Private does not publish. **Save changes** submits all fields
+together and is enabled only for valid, changed values. **Cancel**, Close and
+Escape discard unsaved edits and return focus to Edit details without closing
+Settings. Pending saves and status checks block dialog dismissal; an uncertain
+save may be closed and reopened through **Review pending changes** for check-only
+recovery, never a blind resend. The panel retains its own Close/Escape focus
+return, conversation and collapsed Diagnostics.
+Names accept 1–120 code points and descriptions up to 1,000. Typing and paste
+are capped at those limits without splitting Unicode code points; a middle edit
+keeps the existing suffix and accepts only the inserted text that fits. Existing
+over-limit relay values are preserved: edits may reduce or replace text without
+growing the excess, and Save stays invalid until both fields meet the limits. Character
+counts appear at the trailing end of the label row only within the last 10% of
+each limit (`108/120` or `900/1,000`). Visible counters are numeric; the connected
+accessible description retains the full character-count meaning.
+Names follow the relay’s Unicode whitespace and leading-hash canonicalization
+before validation, signing and confirmation. Empty descriptions clear the value. The internal `Buzz session (` marker is
+rejected with a specific explanation only when present, not as part of length
+feedback. Command validation still rejects oversized input independently of the UI.
+
+Editing requires fresh relay-authored metadata (`39000`), administrators (`39001`)
+and membership (`39002`) for the exact channel, plus current session participation.
+Only direct channel owners/admins may edit ordinary stream/forum channels. Cached,
+read-only, archived, DM and work-session views do not offer this editor. A local
+key, delegated agent role or community-admin status does not imply channel authority.
+Public → private is supported with an explanation before Save; private → public
+is not. The relay remains the final authority.
+
+`features/relay/channel-details.ts` owns the command and uncertain intent. It
+rechecks authority and the edit's metadata version immediately before signing and
+publication, verifies the signed command, and requires matching fresh metadata
+readback—not merely a publication receipt. Confirmed relay metadata feeds existing
+shared discovery so the panel, conversation header and sidebar use the same values.
+The version check detects observed conflicts but is not a relay-side compare-and-swap:
+concurrent writers can still race after the last read.
+
+A definitive rejection keeps the editable draft. **Reload details** rechecks the
+base without discarding text edits; if the channel has become private, the draft
+adopts that enforced visibility. Inspect the retained edits before saving again. A lost
+publication response or failed/mismatched readback locks the submitted draft and
+offers **Check save status**, which only reads and never republishes. Uncertain
+intent survives panel close/reopen and cache clear within the same session; no
+background polling, automatic replay or durable recovery record is added. If
+status cannot be confirmed, inspect the channel rather than assume failure.
+Session replacement drops the in-memory attempt; it does not retract a sent write.
+Channel/session changes fence old drafts and late completions. Operations use a
+20-second deadline so a stalled read/write becomes explicit recovery, not an
+indefinite saving state.
+
+### FOUNDATION integration rationale
+
+This is migration of an existing Buzz user feature, not a session redesign.
+The current session already owns community/viewer identity, verified reads,
+participation, shared metadata and cancellation. Composing the dedicated details
+owner there keeps those authorities together instead of constructing a second
+connection or making the panel a command owner. The approved `session.ts` change
+is limited to constructor/import, capability exposure, cancellation, cache clear
+and disposal (13 added lines). Policy and write logic remain in the feature owner.
+
+The development broker exposes separate `channel-details-sign` and
+`channel-details-publish` routes, accepting only bounded name/about and optional
+private visibility. Existing archive-only lifecycle, invitation and message-outbox
+admission are unchanged. Publishing reuses the same community's authenticated live
+socket; no HTTP fallback or new connection is added. Restart an already-running
+dev broker to load these routes. `just web` supports this complete browser flow;
+`just desktop` is not required. Hosts without the dedicated capability stay
+read-only; packaged/native adapter parity is not implemented here.
+
+Behavior matrices live in `channel-details.test.ts`,
+`ChannelDetailsEditor.test.tsx`, `store.test.ts` and `relay-broker-api.test.mjs`.
+Real-relay Save/privacy changes require deliberate testing on a disposable channel;
+unit/broker tests and a browser Cancel walkthrough do not establish live-write or
+native acceptance.
+
 ## Performance and correctness carried from Astra
 
 The port retains the prepared-store implementation and its behavior tests:
@@ -507,16 +586,21 @@ Click a message's reply count to open its root and replies in the right column.
 Up to three overlapping participant avatars appear beside the count, with `+N`
 for additional summary participants; missing/unavailable pictures use initials.
 They reuse the channel's existing shared profile/media path, not extra per-row reads.
-The panel automatically traverses the reader’s bounded history range before initial
-bottom positioning; there is no Load more replies button. A prior user scroll gesture
-wins. New replies arrive through the existing session and the panel follows while
-near the bottom, preserving reading position when scrolled up. Sending a reply is
+On a supporting relay, the panel opens at the newest 10 replies and loads older
+pages of 50 when you scroll upward; there is no Load more replies button. It validates
+signed NIP-CW thread bounds on every page. A prior scroll gesture wins over initial
+bottom placement. New replies arrive through the existing session and the panel
+follows near the bottom, preserving reading position above it. Sending a reply is
 explicit navigation intent and reveals the new local row.
 
-**Long-thread limitation:** traversal is oldest-first, capped at ten pages of 50.
-Bottom means bottom of returned history, not necessarily the newest reply in a long
-thread. A limit notice is not a completeness claim. True newest-page opening needs
-a relay query extension; automatic traversal alone does not solve that requirement.
+**Bounded history:** strict mode retains at most ten pages (10 initial replies
+plus nine pages of 50); legacy mode retains at most ten pages of 50. A limit notice is
+not a completeness claim. An older relay returning verified replies without thread
+bounds on the initial probe triggers a clean legacy restart: automatic oldest-first
+traversal, whose bottom may not be the newest reply in a long thread. An empty
+unsigned probe is ambiguous with access denial and stays retryable/unavailable.
+Malformed bounds, failed requests and missing bounds after strict support never
+downgrade. Media review still eagerly loads its bounded comment range.
 The thread and a linked object panel share that slot; a companion can remain below.
 Close or Escape returns focus to the reply button when it is still mounted. Changing
 channel/community or disabling Channels disposes the owned thread view.
