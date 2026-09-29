@@ -80,7 +80,8 @@ function harness({
   });
   // Mirrors the service: the membership goes, and a left selection lands on
   // Personal space without the rail selecting anything. Only the save can
-  // throw, and it does so before anything changes.
+  // throw, and it does so before anything changes. The purge option is
+  // recorded for the assertions on which outcomes clear device state.
   const leave = vi.fn(async (id: string) => {
     if (leaveError) throw leaveError;
     snapshot = {
@@ -316,11 +317,15 @@ it("keeps the keyboard anchor when a synthesised contextmenu event re-enters the
   expect(menu).toHaveAttribute("data-side", "right");
   // Chromium and Firefox synthesise a contextmenu event for Shift+F10 unless the
   // keydown is cancelled; Base UI turns it into a second open request. The
-  // roster re-read shows that request reached the rail item.
+  // menu is already open by then, so that request neither moves the anchor
+  // to the synthesised pointer coordinates nor reads the roster a second time.
   fireEvent.contextMenu(target, { clientX: 20, clientY: 20 });
-  await waitFor(() => expect(h.read).toHaveBeenCalledTimes(3));
   await act(async () => {});
   expect(menu).toHaveAttribute("data-side", "right");
+  expect(h.read).toHaveBeenCalledTimes(2);
+  // A read scheduled by the re-entrant request would land after this flush.
+  await act(async () => {});
+  expect(h.read).toHaveBeenCalledTimes(2);
   fireEvent.keyDown(document.activeElement ?? menu, { key: "Escape" });
   await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
   await waitFor(() => expect(document.activeElement).toBe(target));
@@ -543,7 +548,8 @@ it("leaves an inactive community after confirming: the relay releases it before 
     route,
     expect.objectContaining({ method: "POST", body: "{}" }),
   );
-  expect(h.leave).toHaveBeenCalledWith(secondary);
+  // The relay released the membership, so the device state goes with it.
+  expect(h.leave).toHaveBeenCalledWith(secondary, { purge: true });
   const published =
     h.fetch.mock.invocationCallOrder[
       h.fetch.mock.calls.findIndex(([url]) => String(url) === route)
@@ -578,7 +584,7 @@ it("leaving the selected community tells the host to select Personal space; an i
   // The service owns the store state; the host adds the navigation and ingress
   // recovery that clicking Personal space would, so a Settings card scoped to
   // the gone community is not left open.
-  expect(h.leave).toHaveBeenCalledWith(primary);
+  expect(h.leave).toHaveBeenCalledWith(primary, { purge: true });
   expect(h.onSelect).toHaveBeenCalledTimes(1);
   expect(h.onSelect).toHaveBeenCalledWith(null);
   expect(h.leave.mock.invocationCallOrder[0]).toBeLessThan(
@@ -691,18 +697,27 @@ it.each([
 const absent =
   "You were no longer a member of Secondary, so it was removed from this device.";
 it.each([
-  { error: "invalid: you are not a relay member", toast: absent },
-  { error: "invalid: relay membership is not enabled", toast: absent },
+  // The relay holds no membership, so nothing keyed to it is worth keeping.
+  { error: "invalid: you are not a relay member", toast: absent, purge: true },
   {
-    // The relay refuses a banned identity before any leave handler runs, so
-    // there is nothing a retry could achieve: access is already severed.
+    error: "invalid: relay membership is not enabled",
+    toast: absent,
+    purge: true,
+  },
+  {
+    // The relay refuses a banned identity before any leave handler runs, so a
+    // retry can do nothing while the ban lasts. Bans can be timed or lifted
+    // and the relay keeps the membership meanwhile, so the device forgets the
+    // community without purging the drafts and reading positions it would
+    // reuse after a re-add, and the notice promises nothing permanent.
     error: "blocked: you are banned from this community",
     toast:
-      "Your access to Secondary was revoked, so it was removed from this device.",
+      "You’re currently banned from Secondary, so the leave was refused. It was removed from this device and can be added again by its URL if access is restored.",
+    purge: false,
   },
 ])(
-  "forgets a community whose relay answers $error and says so",
-  async ({ error, toast }) => {
+  "forgets a community whose relay answers $error and says so (purge: $purge)",
+  async ({ error, toast, purge }) => {
     const user = userEvent.setup();
     const h = harness({
       leaveResponse: () => Response.json({ error }, { status: 400 }),
@@ -713,7 +728,8 @@ it.each([
     const notice = await screen.findByText(toast);
     expect(notice.closest(".buzz-toast")).not.toBeNull();
     expect(notice.closest(".buzz-toast")).toHaveAttribute("data-type", "info");
-    expect(h.leave).toHaveBeenCalledWith(secondary);
+    expect(h.leave).toHaveBeenCalledTimes(1);
+    expect(h.leave).toHaveBeenCalledWith(secondary, { purge });
     await waitFor(() =>
       expect(
         screen.queryByRole("button", { name: "Switch to Secondary" }),
@@ -723,18 +739,22 @@ it.each([
   },
 );
 
-it("reports a device that could not finish forgetting a left community without blaming the connection", async () => {
+it("reports a device that could not finish forgetting a left community without blaming the connection, naming the storage error", async () => {
   const user = userEvent.setup();
   const h = harness({
+    // The service's wrapped save failure, with the storage error as its cause.
     leaveError: new Error(
       "Could not save this community on this device. Try again.",
+      { cause: new Error("Setting the value exceeded the quota.") },
     ),
   });
   render(<CommunityRail communities={h.communities} onSelect={h.onSelect} />);
   const dialog = await askToLeave(user, "Secondary");
   await user.click(confirmLeave(dialog));
+  // A store that never saves would otherwise show the identical promise on
+  // every attempt; the storage error's own words tell the viewer why.
   const notice = await screen.findByText(
-    "Left Secondary, but this device couldn’t finish cleaning up. Leave it again to finish.",
+    "Left Secondary, but this device couldn’t finish cleaning up (Setting the value exceeded the quota). Leave it again to finish.",
   );
   expect(notice.closest(".buzz-toast")).toHaveAttribute("data-type", "error");
   expect(
@@ -745,11 +765,53 @@ it("reports a device that could not finish forgetting a left community without b
   // The relay released the membership; only the device record failed, so the
   // community stays in the rail for the retry that reaches the absent path.
   expect(h.leaveRequests()).toHaveLength(1);
-  expect(h.leave).toHaveBeenCalledWith(secondary);
+  expect(h.leave).toHaveBeenCalledWith(secondary, { purge: true });
   expect(h.onSelect).not.toHaveBeenCalled();
   await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
   expect(button("Secondary")).toBeInTheDocument();
   await waitFor(() => expect(button("Secondary")).toHaveFocus());
+});
+
+it("falls back to the save failure's own message when it carries no cause", async () => {
+  const user = userEvent.setup();
+  const h = harness({ leaveError: new Error("Storage is read-only.") });
+  render(<CommunityRail communities={h.communities} />);
+  const dialog = await askToLeave(user, "Secondary");
+  await user.click(confirmLeave(dialog));
+  await screen.findByText(
+    "Left Secondary, but this device couldn’t finish cleaning up (Storage is read-only). Leave it again to finish.",
+  );
+  expect(button("Secondary")).toBeInTheDocument();
+});
+
+it("still reports a successful leave when the host's selection callback throws", async () => {
+  const user = userEvent.setup();
+  const h = harness();
+  const hostError = new Error("Navigation failed");
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  const onSelect = vi.fn(() => {
+    throw hostError;
+  });
+  render(<CommunityRail communities={h.communities} onSelect={onSelect} />);
+  const dialog = await askToLeave(user, "Primary");
+  await user.click(confirmLeave(dialog));
+  // The device did finish: the community is gone and the relay released it.
+  // A host that cannot navigate afterwards must not read as a device failure.
+  const notice = await screen.findByText("Left Primary.");
+  expect(notice.closest(".buzz-toast")).toHaveAttribute("data-type", "success");
+  expect(screen.queryByText(/couldn’t finish cleaning up/)).toBeNull();
+  expect(onSelect).toHaveBeenCalledWith(null);
+  expect(error).toHaveBeenCalledWith(
+    "Couldn't select Personal space after leaving Primary",
+    hostError,
+  );
+  await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+  expect(
+    screen.queryByRole("button", { name: "Switch to Primary" }),
+  ).toBeNull();
+  const personal = screen.getByRole("button", { name: "Personal space" });
+  expect(personal).toHaveAttribute("aria-current", "true");
+  await waitFor(() => expect(personal).toHaveFocus());
 });
 
 it("says when some saved data outlived the purge", async () => {
@@ -819,7 +881,7 @@ it("leaving the selected community lands on Personal space, and the last one lea
   let dialog = await askToLeave(user, "Primary");
   await user.click(confirmLeave(dialog));
   await screen.findByText("Left Primary.");
-  expect(h.leave).toHaveBeenCalledWith(primary);
+  expect(h.leave).toHaveBeenCalledWith(primary, { purge: true });
   const personal = screen.getByRole("button", { name: "Personal space" });
   expect(personal).toHaveAttribute("aria-current", "true");
   await waitFor(() => expect(personal).toHaveFocus());

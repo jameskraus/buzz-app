@@ -12,6 +12,7 @@ import type { Communities, Membership } from "./service";
 import { CommunityDialog } from "./CommunityDialog";
 import { CommunityRailItem } from "./CommunityRailItem";
 import { communityDestination } from "./destination";
+import type { PurgeFailure } from "./device-state";
 import { Tooltip } from "../../shared/design-system/ui/Tooltip";
 import styles from "./Communities.module.css";
 import { fetchCommunityIcon } from "./community-icon";
@@ -116,9 +117,9 @@ export function CommunityRail({
     else communities.select(id);
   };
   /** Publish first; the device forgets the community only once the relay has
-   * released the membership, reports it never held one, or has revoked the
-   * viewer's access. Anything else keeps the membership and the menu item for
-   * a retry. */
+   * released the membership, reports it never held one, or refuses the viewer
+   * as banned. Anything else keeps the membership and the menu item for a
+   * retry. */
   const leave = async () => {
     if (!leaving || leaving.pending) return;
     const { membership } = leaving;
@@ -131,30 +132,46 @@ export function CommunityRail({
       setLeaving(null);
       return;
     }
-    // From here the relay holds no membership to go back to; only this device
+    // From here a retry cannot reach the relay's membership; only this device
     // can still fail, and its failures read differently from a lost connection.
     const wasSelected = communities.snapshot().selected === membership.id;
+    let residue: PurgeFailure[];
     try {
-      const residue = await communities.leave(membership.id);
-      // The service already fell back to Personal space. Telling the host too
-      // gives the leave the same navigation and ingress recovery as clicking
-      // Personal space, instead of leaving a page scoped to a gone community.
-      if (wasSelected) onSelect?.(null);
-      notify(
-        leftText(membership.name, outcome, residue.length > 0),
-        outcome === "left" ? "success" : "info",
-      );
-    } catch {
+      // A banned viewer is still a member on the relay (bans can be timed or
+      // lifted), so the device keeps that origin's drafts and reading
+      // positions for a later re-add instead of purging them.
+      residue = await communities.leave(membership.id, {
+        purge: outcome !== "access-revoked",
+      });
+    } catch (error) {
       // Only the device record failed to save, before anything changed: the
       // community is still in the rail, and leaving it again reaches the
       // already-absent path.
-      notify(
-        `Left ${membership.name}, but this device couldn’t finish cleaning up. Leave it again to finish.`,
-        "error",
-      );
-    } finally {
+      notify(cleanupFailureText(membership.name, error), "error");
       setLeaving(null);
+      return;
     }
+    // The community is gone from this device whatever happens next, so only
+    // the service call above may read as a cleanup failure.
+    if (wasSelected) {
+      // The service already fell back to Personal space. Telling the host too
+      // gives the leave the same navigation and ingress recovery as clicking
+      // Personal space, instead of leaving a page scoped to a gone community.
+      try {
+        onSelect?.(null);
+      } catch (error) {
+        // A host that cannot navigate is the host's failure, not the device's.
+        console.error(
+          `Couldn't select Personal space after leaving ${membership.name}`,
+          error,
+        );
+      }
+    }
+    notify(
+      leftText(membership.name, outcome, residue.length > 0),
+      outcome === "left" ? "success" : "info",
+    );
+    setLeaving(null);
   };
   return (
     <>
@@ -246,16 +263,37 @@ export function CommunityRail({
   );
 }
 
-/** What the relay settled, plus whether any saved data outlived the purge. */
+/** What the relay settled, plus whether any saved data outlived the purge. The
+ * banned answer promises nothing about how long the ban lasts. */
 function leftText(name: string, outcome: LeaveOutcome, residue: boolean) {
   const settled =
     outcome === "already-absent"
       ? `You were no longer a member of ${name}, so it was removed from this device.`
       : outcome === "access-revoked"
-        ? `Your access to ${name} was revoked, so it was removed from this device.`
+        ? `You’re currently banned from ${name}, so the leave was refused. It was removed from this device and can be added again by its URL if access is restored.`
         : `Left ${name}.`;
   return residue ? `${settled} Some saved data couldn’t be cleared.` : settled;
 }
+
+/** The relay has answered, and only the device record failed to save, before
+ * anything changed. The storage error is named so a store that never saves
+ * reads as such, rather than as the same retry promise on every attempt. */
+function cleanupFailureText(name: string, error: unknown) {
+  // The service wraps the storage error as the cause; prefer its own words.
+  const reason = (
+    wordsOf(error instanceof Error ? error.cause : undefined) || wordsOf(error)
+  ).replace(/\.$/, "");
+  return `Left ${name}, but this device couldn’t finish cleaning up${
+    reason ? ` (${reason})` : ""
+  }. Leave it again to finish.`;
+}
+
+const wordsOf = (error: unknown) =>
+  error instanceof Error
+    ? error.message
+    : typeof error === "string"
+      ? error
+      : "";
 
 /** Relay-authored refusals the viewer can act on read verbatim-ish; everything
  * else, including timeouts and unreachable relays, keeps one retry message. */

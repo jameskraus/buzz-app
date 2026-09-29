@@ -97,10 +97,10 @@ export async function publishProfile(
 export type LeaveOutcome = "left" | SettledRefusal;
 /** Publishes a NIP-43 leave request to the community's relay by origin, without
  * acquiring a session. Resolves only once the relay accepts it, answers that
- * it holds no membership for the viewer, or has banned the viewer (access is
- * already severed, so nothing is left to release); any other refusal,
- * transport failure or timeout throws and leaves the membership for the caller
- * to retry. */
+ * it holds no membership for the viewer, or refuses the viewer as banned (the
+ * membership stays on the relay, but no retry can reach it while the ban
+ * lasts); any other refusal, transport failure or timeout throws and leaves
+ * the membership for the caller to retry. */
 export async function requestLeave(id: string): Promise<LeaveOutcome> {
   await registerCommunity(id, AbortSignal.timeout(12000));
   try {

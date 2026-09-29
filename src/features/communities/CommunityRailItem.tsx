@@ -101,9 +101,10 @@ export function CommunityRailItem({
   const openMenu = (anchor?: HTMLElement) => {
     navigated.current = false;
     // Some browsers synthesise a contextmenu event for Shift+F10, which re-enters
-    // through Base UI while the keyboard open is in flight: the first anchor wins.
+    // through Base UI once the keyboard open has rendered: the first anchor
+    // wins, and the roster is not read a second time for the same open.
     setMenu((current) => current ?? { anchor });
-    onMenuOpen?.();
+    if (menu === null) onMenuOpen?.();
   };
   const openFromKeyboard = (event: KeyboardEvent<HTMLElement>) => {
     if (

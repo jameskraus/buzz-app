@@ -21,7 +21,9 @@ const ABSENT = new Set([
   "invalid: relay membership is not enabled",
 ]);
 // The relay refuses a banned identity at authentication, before any leave
-// handler runs, so no retry can ever succeed: access is already severed.
+// handler runs, so no retry can succeed while the ban lasts. The ban may be
+// timed or lifted later (buzz-relay handlers/moderation_commands.rs), and the
+// relay keeps the membership meanwhile, so the viewer is not absent.
 const REVOKED = "blocked: you are banned from this community";
 const REFUSALS = new Set([
   ...ABSENT,
@@ -41,12 +43,15 @@ export function leaveRefusal(body: unknown): string | undefined {
     : undefined;
 }
 
-/** Refusals that still end the membership on this device. */
+/** Refusals that still end the membership on this device. Only the first
+ * means the relay holds nothing; after the second it still holds a membership
+ * the viewer cannot reach, so device state keyed by the origin is worth
+ * keeping for a later re-add. */
 export type SettledRefusal = "already-absent" | "access-revoked";
 
-/** Classifies a refusal after which nothing remains for the relay to release:
- * it holds no membership for the viewer, or it has already severed the
- * viewer's access. Any other refusal leaves the membership for a retry. */
+/** Classifies a refusal after which a retry can do nothing: the relay holds no
+ * membership for the viewer, or it refuses the viewer at the door for as long
+ * as a ban lasts. Any other refusal leaves the membership for a retry. */
 export function settledRefusal(reason: string): SettledRefusal | undefined {
   if (ABSENT.has(reason)) return "already-absent";
   if (reason === REVOKED) return "access-revoked";

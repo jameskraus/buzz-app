@@ -11,7 +11,7 @@ export type PurgeFailure = { store: string; error: unknown };
 /** Records a store that could not be cleared. The membership is already gone,
  * so the failure is only observable through the console and the caller's
  * report; nothing retries it later. */
-export function purgeFailure(
+function purgeFailure(
   origin: string,
   store: string,
   error: unknown,

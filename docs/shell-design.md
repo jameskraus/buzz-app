@@ -132,16 +132,24 @@ dialog owned by the rail (“Leave <name>?”) whose destructive confirm shows a
 pending state while the request runs; the menu item itself is disabled and reads
 “Leaving…” for that community until the relay answers. The rail publishes the
 NIP-43 leave request to the community's relay by origin, then asks the
-communities service to forget it; the relay's acceptance, its "not a member"
-answer or its banned answer removes the community and reports through the toast
-stack, while any other refusal or an unreachable relay keeps the membership and
-reports the reason. A failure after the relay has answered is the device's own
-and reads that way: the community was left but this device could not finish
-cleaning up, and leaving it again finishes. Saved data the purge could not clear
-is logged by store and adds a line to the success notice. When the left
-community was selected, the rail routes the fallback to Personal space through
-the host's selection callback so navigation and ingress recovery match a click
-on Personal space, rather than leaving a page scoped to a gone community. Focus
+communities service to forget it. The relay's acceptance or its "not a member"
+answer removes the community and purges its device state; its banned answer
+removes the community and disposes the session but keeps the device state,
+because the relay still holds the membership while the ban lasts, and the
+informational notice says the viewer is currently banned and the community can
+be added again by its URL if access is restored, without promising permanence.
+Any other refusal or an unreachable relay keeps the membership and reports the
+reason. A failure after the relay has answered is the device's own and reads
+that way: the community was left but this device could not finish cleaning up,
+with the storage error's own words in parentheses, and leaving it again
+finishes. Only the service call can produce that message; the host's selection
+callback and the success notice run outside it, so a host that throws while
+navigating is logged as its own error and the leave still reports success.
+Saved data the purge could not clear is logged by store and adds a line to the
+success notice. When the left community was selected, the rail routes the
+fallback to Personal space through the host's selection callback so navigation
+and ingress recovery match a click on Personal space, rather than leaving a page
+scoped to a gone community. Focus
 returns to the community when it is still saved; once it is gone, focus follows
 the selection, to the still-selected community or to Personal space where a
 left selection now lands. Closing a menu opened from the keyboard returns focus to
