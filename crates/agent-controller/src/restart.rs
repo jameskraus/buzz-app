@@ -82,6 +82,7 @@ pub(crate) fn spawn_config(agent: &Agent) -> Value {
         "env": env,
         "effort": crate::agent_defaults::effort(agent),
         "session_policy": agent.session_policy.unwrap_or_default(),
+        "launch_protection": agent.extra.get("launchProtection"),
     })
 }
 

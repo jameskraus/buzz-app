@@ -334,10 +334,12 @@ pub struct GooseModelContext {
 pub struct Controller {
     pub(crate) store: Store,
     credentials: Arc<dyn Credentials>,
-    bundle: Result<RuntimeBundle>,
+    pub(crate) bundle: Result<RuntimeBundle>,
     running: BTreeMap<String, Running>,
     errors: BTreeMap<String, String>,
     ownership_root: PathBuf,
+    pub(crate) protection_paths: Result<Vec<PathBuf>>,
+    pub(crate) security_providers: BTreeMap<String, crate::security::Provider>,
 }
 impl Controller {
     pub fn new(
@@ -353,6 +355,8 @@ impl Controller {
             running: BTreeMap::new(),
             errors: BTreeMap::new(),
             ownership_root,
+            security_providers: BTreeMap::new(),
+            protection_paths: Ok(Vec::new()),
         }
     }
     pub fn snapshot(&mut self) -> Result<ControlSnapshot> {
@@ -814,6 +818,7 @@ impl Controller {
                 .env("DATABRICKS_MODEL_FILTER", &settings.filter)
                 .env_remove("DATABRICKS_TOKEN");
         }
+        self.wrap_protected_worker(&agent, &mut command, temporary.path())?;
         // Disarm app-side deletion before a child can use this directory. The
         // supervisor deletes it only after confirmed whole-session teardown.
         #[cfg(unix)]

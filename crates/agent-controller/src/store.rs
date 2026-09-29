@@ -16,13 +16,13 @@ const MAX_DEFAULTS_BYTES: usize = 1024 * 1024;
 
 #[derive(Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Document {
+pub(crate) struct Document {
     version: u32,
-    agents: Vec<Agent>,
+    pub(crate) agents: Vec<Agent>,
     #[serde(default)]
     parked: BTreeMap<String, ParkedIdentity>,
     #[serde(flatten)]
-    extra: BTreeMap<String, Value>,
+    pub(crate) extra: BTreeMap<String, Value>,
 }
 /// Keyless inventory. Provenance is not proof of present key custody or membership.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -103,7 +103,7 @@ impl Store {
     fn path(&self) -> PathBuf {
         self.root.join("agents.json")
     }
-    fn read(&self) -> Result<Document> {
+    pub(crate) fn read(&self) -> Result<Document> {
         let path = self.path();
         match fs::symlink_metadata(&path) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -140,7 +140,7 @@ impl Store {
         validate(&doc)?;
         Ok(doc)
     }
-    fn write(&self, doc: &Document) -> Result<()> {
+    pub(crate) fn write(&self, doc: &Document) -> Result<()> {
         self.write_with_backup(doc, true)
     }
     fn write_with_backup(&self, doc: &Document, backup: bool) -> Result<()> {

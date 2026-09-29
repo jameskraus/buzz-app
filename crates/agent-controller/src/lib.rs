@@ -18,6 +18,7 @@ mod profile;
 mod restart;
 mod runtime;
 mod secret;
+pub mod security;
 mod store;
 #[cfg(unix)]
 mod supervisor;
