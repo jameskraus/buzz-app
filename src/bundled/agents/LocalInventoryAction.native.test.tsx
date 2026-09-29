@@ -80,17 +80,39 @@ it("explains the missing confirmation instead of offering Use here in the dialog
     <LocalInventoryAction
       control={control}
       agent={f.agent}
+      action="use"
       destination={destination}
       owner={owner}
       disabled={false}
       onPending={() => {}}
       onUsed={() => {}}
+      onClone={() => {}}
     />,
   );
   expect(screen.getByRole("status")).toHaveTextContent(
     agentSetupUnavailableMessage,
   );
   expect(screen.queryByRole("button", { name: "Use here" })).toBeNull();
+});
+
+it("keeps Clone available because it does not need the confirmation", async () => {
+  const { f, control } = incompleteImport();
+  await control.refresh();
+  render(
+    <LocalInventoryAction
+      control={control}
+      agent={f.agent}
+      action="clone"
+      destination={destination}
+      owner={owner}
+      disabled={false}
+      onPending={() => {}}
+      onUsed={() => {}}
+      onClone={() => {}}
+    />,
+  );
+  expect(screen.queryByText(agentSetupUnavailableMessage)).toBeNull();
+  expect(screen.getByRole("button", { name: "Review clone" })).toBeEnabled();
 });
 
 it("does not offer Use here for an imported identity that needs setup", async () => {

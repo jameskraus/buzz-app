@@ -51,7 +51,8 @@ export function LocalInventoryAction({
   }, [onPending]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (!agentSetupConfirmationAvailable())
+  // Clone reads saved settings locally; only Use here needs the confirmation.
+  if (action === "use" && !agentSetupConfirmationAvailable())
     return <p role="status">{agentSetupUnavailableMessage}</p>;
   return (
     <>
