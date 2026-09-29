@@ -317,4 +317,17 @@ it("lists only active primary pages in the channel sidebar", async () => {
   expect(
     within(search).queryByRole("option", { name: "Agents" }),
   ).not.toBeInTheDocument();
+  await userEvent.keyboard("{Escape}");
+
+  // Every primary page is optional; with none active the landmark goes too.
+  for (const id of ["buzz.inbox", "buzz.bestie", "buzz.projects"])
+    await act(() => current.plugins.change("disable", id));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("navigation", { name: "Pages" }),
+    ).not.toBeInTheDocument(),
+  );
+  expect(
+    screen.getByRole("complementary", { name: "Channel sidebar" }),
+  ).toBeInTheDocument();
 });

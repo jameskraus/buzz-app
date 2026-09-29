@@ -17,8 +17,10 @@ import type { SidebarPreferences } from "../relay/sidebar-preferences";
 import type { RelayData, RelaySnapshot } from "../relay/service";
 import type { ChannelList } from "../relay/contracts";
 import type { Navigation } from "../navigation/controller";
+import type { ReactNode } from "react";
 import { ChannelSidebar } from "./ChannelSidebar";
 import { ChannelNavigationProvider } from "./ChannelNavigationState";
+import styles from "../../bundled/channels/Channels.module.css";
 
 const { rowRender, menuRender } = vi.hoisted(() => ({
   rowRender: vi.fn(),
@@ -123,7 +125,15 @@ function fixture(
     async clearCache() {},
   } satisfies RelayData;
   const navigator = { open: vi.fn() } as unknown as Navigation;
-  const view = (id: string, sessionsEnabled = true) => (
+  const view = (
+    id: string,
+    sessionsEnabled = true,
+    pages: ReactNode = (
+      <nav aria-label="Pages">
+        <button type="button">Projects</button>
+      </nav>
+    ),
+  ) => (
     <ChannelNavigationProvider relay={relay}>
       <ChannelSidebar
         relay={relay}
@@ -137,9 +147,7 @@ function fixture(
         }}
         sessionsEnabled={sessionsEnabled}
       >
-        <nav aria-label="Pages">
-          <button type="button">Projects</button>
-        </nav>
+        {pages}
       </ChannelSidebar>
     </ChannelNavigationProvider>
   );
@@ -281,6 +289,18 @@ it.each(["ready", "connecting", "error"] as const)(
     expect(
       within(pages).getByRole("button", { name: "Projects" }),
     ).toBeVisible();
+    expect(pages.closest(`.${styles.destinations}`)).not.toBeNull();
+  },
+);
+
+it.each(["ready", "connecting", "error"] as const)(
+  "omits the page destinations wrapper when the shell passes none while %s",
+  (status) => {
+    const h = fixture(undefined, status);
+    const { container } = render(h.view("alpha", true, null));
+    expect(screen.queryByRole("navigation", { name: "Pages" })).toBeNull();
+    expect(container.querySelector(`.${styles.destinations}`)).toBeNull();
+    expect(screen.getByRole("img", { name: "Buzz" })).toBeInTheDocument();
   },
 );
 

@@ -126,7 +126,10 @@ function SidebarNavigation({ children }: { children: ReactNode }) {
           aria-label="Buzz"
         />
       </div>
-      <div className={styles.destinations}>{children}</div>
+      {/* The shell passes null when no primary page is active; the wrapper's margin must not remain around nothing. */}
+      {children != null && children !== false && (
+        <div className={styles.destinations}>{children}</div>
+      )}
     </>
   );
 }
