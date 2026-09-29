@@ -246,6 +246,11 @@ pub struct Manager {
     safe_mode: bool,
 }
 impl Manager {
+    /// Host control-plane location that protected workers must not modify.
+    pub fn storage_root(&self) -> &std::path::Path {
+        &self.root
+    }
+
     pub fn open(home: Option<PathBuf>, profile: &str, safe_mode: bool) -> Result<Self> {
         valid_id(profile)?;
         let home = home

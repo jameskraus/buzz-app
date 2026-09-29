@@ -378,6 +378,7 @@ fn commands<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Sen
         goose_install,
         pi_install,
         agent_control_use_here,
+        agents::agent_security,
         agent_control_save,
         agent_control_save_defaults,
         agent_control_delete,

@@ -302,11 +302,14 @@ impl Host {
                 agent.start_on_app_launch.then_some((agent.id, None))
             })
             .collect();
-        let controller = Controller::new(
+        let mut controller = Controller::new(
             store,
             credentials.clone(),
             bundle,
             legacy_parent.join("dev.local.buzz.agent-ownership"),
+        );
+        controller.protect_control_paths(
+            crate::Manager::from_env().map(|manager| vec![manager.storage_root().to_path_buf()]),
         );
         Ok(Self {
             inventory_warnings,
@@ -1312,4 +1315,31 @@ fn refuse_legacy() -> Result<(), String> {
         return Err("Could not check old Buzz processes; Start refused".into());
     }
     refuse_legacy_listing(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// Trusted plugin service: native state remains authoritative for all start paths.
+#[tauri::command]
+pub(crate) async fn agent_security(
+    state: tauri::State<'_, AgentHost>,
+    request: buzz_agent_controller::security::Request,
+) -> Result<serde_json::Value, String> {
+    let owner = state.inner().clone();
+    let provider = match &request {
+        buzz_agent_controller::security::Request::Register { provider, .. } => {
+            Some(provider.clone())
+        }
+        _ => None,
+    };
+    let result = run(owner.clone(), move |host| host.controller.security(request)).await?;
+    if let Some(provider) = provider {
+        tauri::async_runtime::spawn(async move {
+            let ids = owner
+                .with(|host| host.controller.security_restore_ids(&provider))
+                .unwrap_or_default();
+            for id in ids {
+                let _ = start(owner.clone(), id, Action::Start, true, None, None).await;
+            }
+        });
+    }
+    Ok(result)
 }

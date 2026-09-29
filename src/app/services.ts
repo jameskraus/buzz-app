@@ -3,6 +3,7 @@ import {
   createIdentity,
   nativeIdentityEnabled,
 } from "../features/identity/service";
+import { AgentSecurityService } from "../features/agents/security";
 import { SettingsCardsService } from "../features/settings/service";
 import { TemplateProvidersService } from "../features/channel-templates/provider";
 import { IdentityNamesService } from "../features/identity-names/service";
@@ -41,6 +42,7 @@ export function createServices() {
     bundled: bundledPlugins,
   });
   const agentControl = provideAgentControl(ctx);
+  new AgentSecurityService(ctx);
   const navigationHost = provideNavigation(ctx);
   const navigation = navigationHost.navigation;
   const browser = new BrowserService(ctx);

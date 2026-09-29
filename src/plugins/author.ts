@@ -96,3 +96,10 @@ export type {
   AgentImportPreview,
   ImportSource,
 } from "../features/agents/control";
+
+export type {
+  AgentSecurity,
+  SecurityBinding,
+  SecuritySnapshot,
+  SecurityProvider,
+} from "../features/agents/security";

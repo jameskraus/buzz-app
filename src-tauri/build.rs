@@ -42,6 +42,7 @@ fn main() {
             "agent_control_read_log",
             "goose_install",
             "pi_install",
+            "agent_security",
             "agent_control_save",
             "agent_control_save_defaults",
             "agent_control_start_on_app_launch",
