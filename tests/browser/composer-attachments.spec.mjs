@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
-import react from "@vitejs/plugin-react";
+import react from "../../scripts/react-plugin.ts";
 import { createServer } from "./vite-server.mjs";
 
 // Browser-only boundary: actual File/DataTransfer delivery, editor capture and page wiring.

@@ -1,6 +1,6 @@
 import { fixtureAliases } from "../relay-config.ts";
 import { build } from "vite";
-import react from "@vitejs/plugin-react";
+import react from "../../scripts/react-plugin.ts";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

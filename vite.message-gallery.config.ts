@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import react from "./scripts/react-plugin.ts";
 
 // Product specimens have their own document, CSS reset and bundle. The design
 // viewer's core-only import guard remains unchanged.

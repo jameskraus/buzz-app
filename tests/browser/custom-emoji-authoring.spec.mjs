@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { createServer } from "./vite-server.mjs";
-import react from "@vitejs/plugin-react";
+import react from "../../scripts/react-plugin.ts";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools";

@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { createServer } from "vite";
-import react from "@vitejs/plugin-react";
+import react from "../../scripts/react-plugin.ts";
 import { fileURLToPath } from "node:url";
 import { run } from "./run-command.mjs";
 import { mkdtemp, cp, readFile, writeFile, rm } from "node:fs/promises";

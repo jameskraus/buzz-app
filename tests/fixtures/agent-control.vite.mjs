@@ -1,4 +1,4 @@
-import react from "@vitejs/plugin-react";
+import react from "../../scripts/react-plugin.ts";
 import { fileURLToPath } from "node:url";
 
 // Deliberately independent of vite.config.ts: no live broker, env file or identity.

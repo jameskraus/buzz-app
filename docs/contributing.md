@@ -33,6 +33,16 @@ No user-level npm configuration edit, Corepack bootstrap, or temporary
 tool PATH is needed for a clean public-registry setup. Commit the `bin/` scripts
 and package symlinks; `.hermit/` contains ignored local state.
 
+React components and hooks use the native React Compiler through
+`oxc-transform-react`. Application, gallery, and browser-fixture
+builds share `scripts/react-plugin.ts`; existing manual memoization is retained.
+The integration is experimental, and some functions may be left unoptimized.
+For a compiler-off comparison, prefix the same command with
+`BUZZ_REACT_COMPILER=0`. This is a build-time setting: restart development servers
+or rebuild assets when changing it. Keep the React mode, browser, data, and CPU
+throttling identical across measurements, and inspect generated caches as well
+as diagnostics before claiming a component was optimized.
+
 All tool versions are unchanged by the public-tooling migration. The public
 catalog does not yet include Node 24.18.0, so `bin/packages/node.hcl` pins its
 [official downloads and checksums](https://nodejs.org/dist/v24.18.0/SHASUMS256.txt)

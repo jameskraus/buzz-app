@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig, loadEnv, type PluginOption } from "vite";
-import react from "@vitejs/plugin-react";
+import react from "./scripts/react-plugin.ts";
 import { worktreePort } from "./scripts/worktree-port.mjs";
 import {
   parseCommunityAliases,

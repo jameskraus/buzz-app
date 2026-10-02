@@ -1,5 +1,5 @@
 import { test as base, expect } from "@playwright/test";
-import react from "@vitejs/plugin-react";
+import react from "../../scripts/react-plugin.ts";
 import { fileURLToPath } from "node:url";
 import { createServer } from "./vite-server.mjs";
 

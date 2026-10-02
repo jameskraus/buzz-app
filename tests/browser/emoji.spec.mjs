@@ -1,7 +1,7 @@
 import { expectPhosphor } from "./phosphor.mjs";
 import { test, expect } from "@playwright/test";
 import { createServer } from "vite";
-import react from "@vitejs/plugin-react";
+import react from "../../scripts/react-plugin.ts";
 import { fileURLToPath } from "node:url";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";

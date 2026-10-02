@@ -1,5 +1,5 @@
 import { createServer } from "vite";
-import react from "@vitejs/plugin-react";
+import react from "../../../scripts/react-plugin.ts";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import {

@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { createServer } from "./vite-server.mjs";
-import react from "@vitejs/plugin-react";
+import react from "../../scripts/react-plugin.ts";
 import { fileURLToPath } from "node:url";
 
 test("editable composer renders links and mentions while preserving source and notification intent", async ({

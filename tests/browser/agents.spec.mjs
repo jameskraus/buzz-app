@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { npubEncode } from "nostr-tools/nip19";
 import { createServer } from "./vite-server.mjs";
-import react from "@vitejs/plugin-react";
+import react from "../../scripts/react-plugin.ts";
 import { fileURLToPath } from "node:url";
 import { watchPageErrors } from "./page-errors.mjs";
 

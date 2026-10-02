@@ -51,6 +51,7 @@ const nonIconDependencies = new Set([
   "micromark-extension-gfm-table",
   "motion",
   "nostr-tools",
+  "oxc-transform-react", // Native React compiler, not an icon catalog.
   "postcss",
   "prosemirror-commands",
   "prosemirror-history",

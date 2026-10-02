@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { createServer } from "../../../tests/browser/vite-server.mjs";
-import react from "@vitejs/plugin-react";
+import react from "../../../scripts/react-plugin.ts";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 import { watchPageErrors } from "../../../tests/browser/page-errors.mjs";

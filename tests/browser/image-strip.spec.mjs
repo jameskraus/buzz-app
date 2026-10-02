@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import react from "@vitejs/plugin-react";
+import react from "../../scripts/react-plugin.ts";
 import { createServer } from "./vite-server.mjs";
 
 // Neither engine scrolls horizontally on focus for a tile that is already
