@@ -9,7 +9,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it("updates the media silhouette after resize and releases its observer on unmount", () => {
+it("waits for layout, updates the media silhouette, and releases its observer on unmount", () => {
   let resize = () => {};
   const disconnect = vi.fn();
   vi.stubGlobal(
@@ -23,9 +23,9 @@ it("updates the media silhouette after resize and releases its observer on unmou
     },
   );
   let width = 320;
-  vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(
-    () => width,
-  );
+  const measure = vi
+    .spyOn(HTMLElement.prototype, "offsetWidth", "get")
+    .mockImplementation(() => width);
   vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(180);
   function Surface() {
     const corners = useMediaCorners();
@@ -40,6 +40,9 @@ it("updates the media silhouette after resize and releases its observer on unmou
   const { container, unmount } = render(<Surface />);
   const surface = container.firstElementChild as HTMLElement;
   const outline = surface.querySelector("path");
+  // Ref attachment must not synchronously force layout during React's commit.
+  expect(measure).not.toHaveBeenCalled();
+  resize();
   expect(outline?.getAttribute("d")).toContain("M 25.6 0 L 294.4 0");
   expect(surface.style.getPropertyValue("--media-corner-clip")).toContain(
     "M 25.6 0 L 294.4 0",
@@ -50,7 +53,14 @@ it("updates the media silhouette after resize and releases its observer on unmou
   expect(surface.style.getPropertyValue("--media-corner-clip")).toContain(
     "M 25.6 0 L 214.4 0",
   );
+  width = 0;
+  resize();
+  expect(outline?.getAttribute("d")).toContain("M 25.6 0 L 214.4 0");
+  width = 320;
+  resize();
+  expect(outline?.getAttribute("d")).toContain("M 25.6 0 L 294.4 0");
   unmount();
   expect(disconnect).toHaveBeenCalledOnce();
   expect(surface.style.getPropertyValue("--media-corner-clip")).toBe("");
+  expect(surface.hasAttribute("data-smooth-corners")).toBe(false);
 });

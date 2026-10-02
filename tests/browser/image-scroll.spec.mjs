@@ -79,6 +79,27 @@ test("delayed and failed images preserve bottom and reading anchors across remou
   const feed = page.getByRole("region", { name: "Channel message history" });
   const gap = () =>
     feed.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop);
+  // Native geometry/clip agreement cannot be established by the hook's DOM test.
+  const corners = () =>
+    expect
+      .poll(() =>
+        feed.locator('a[aria-label="Open image attachment"]').evaluateAll(
+          (links) =>
+            links.length > 0 &&
+            links.every((link) => {
+              const path = link.querySelector("[data-image-outline] path");
+              const bounds = path?.getBBox();
+              return (
+                link.hasAttribute("data-smooth-corners") &&
+                bounds?.width === link.offsetWidth &&
+                bounds?.height === link.offsetHeight &&
+                link.style.getPropertyValue("--media-corner-clip") ===
+                  `path("${path.getAttribute("d")}")`
+              );
+            }),
+        ),
+      )
+      .toBe(true);
   const loaded = () =>
     expect
       .poll(() =>
@@ -108,6 +129,7 @@ test("delayed and failed images preserve bottom and reading anchors across remou
     await expect.poll(() => pending.size).toBeGreaterThan(0);
     await settle(page);
     expect(await gap()).toBeLessThan(4);
+    await corners();
     await expect(feed.locator("canvas").last()).toBeVisible();
     const before = await feed.evaluate((el) => el.scrollHeight);
     await release();
@@ -115,6 +137,7 @@ test("delayed and failed images preserve bottom and reading anchors across remou
     await settle(page);
     expect(await gap()).toBeLessThan(4);
     expect(await feed.evaluate((el) => el.scrollHeight)).toBe(before);
+    await corners();
     const failedImage = feed.locator('img[src="https://image.test/56.svg"]');
     await expect(failedImage).toHaveCSS("visibility", "hidden");
     await expect(failedImage.locator("..").locator("canvas")).toBeVisible();
@@ -168,6 +191,7 @@ test("delayed and failed images preserve bottom and reading anchors across remou
     // Responsive reservation stays bounded, including missing-metadata fallback.
     await page.setViewportSize({ width: 420, height: 950 });
     await settle(page);
+    await corners();
     expect(await gap()).toBeLessThan(4);
     const bounds = await feed
       .locator('a[aria-label="Open image attachment"]')

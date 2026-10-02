@@ -21,7 +21,7 @@ export function useMediaCorners() {
         ?.setAttribute("d", path);
       element.dataset.smoothCorners = "";
     };
-    sync();
+    // Initial observation runs before paint, without forcing layout in the ref.
     const observer = new ResizeObserver(sync);
     observer.observe(element);
     return () => {
