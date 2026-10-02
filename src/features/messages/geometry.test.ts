@@ -47,3 +47,63 @@ it("invalidates row geometry when resolved author or mention labels change", () 
   names.set(author.pubkey, "Longer author");
   expect(geometrySignature(rows, new Map(), resolve)).not.toBe(renamedMention);
 });
+
+it("admits the size boundary and discards a previous entry on an oversized write", () => {
+  const owner = createRelaySession(null);
+  try {
+    const geometry = geometryFor(owner.session.channels);
+    const cache = [[100], 100] as unknown as Parameters<typeof geometry.set>[3];
+    const limit = "x".repeat(256 * 1024);
+    geometry.set("a", limit, 900, cache);
+    expect(geometry.get("a", limit, 900)).toBe(cache);
+    geometry.set("a", `${limit}x`, 900, cache);
+    expect(geometry.get("a", `${limit}x`, 900)).toBeUndefined();
+    expect(geometry.get("a", limit, 900)).toBeUndefined();
+  } finally {
+    owner.dispose();
+  }
+});
+
+it("never restores oversized history, then uses the current tail when history shrinks", () => {
+  const owner = createRelaySession(null);
+  try {
+    const author = keypair();
+    const rows = foldMessages("a", "relay", [
+      message(author, "a", "Earlier content", 20),
+      message(author, "a", "Tail content", 21),
+    ]);
+    const [first, last] = rows;
+    if (!first || !last) throw new Error("Missing geometry fixture rows");
+    const geometry = geometryFor(owner.session.channels);
+    const cache = [[100, 200], 150] as unknown as Parameters<
+      typeof geometry.set
+    >[3];
+    const profiles = new Map();
+    const original = geometrySignature(rows, profiles);
+    geometry.set("a", original, 900, cache);
+    const oversized = { ...first, content: "x".repeat(256 * 1024) };
+    for (const tail of [last, { ...last, content: "Edited tail" }]) {
+      const signature = geometrySignature([oversized, tail], profiles);
+      geometry.set("a", signature, 900, cache);
+      expect(geometry.get("a", signature, 900)).toBeUndefined();
+      expect(geometry.get("a", original, 900)).toBeUndefined();
+    }
+    const current = [first, { ...last, content: "Edited tail" }];
+    const restored = geometrySignature(current, profiles);
+    geometry.set("a", restored, 900, cache);
+    expect(geometry.get("a", restored, 900)).toBe(cache);
+    expect(geometry.get("a", original, 900)).toBeUndefined();
+    expect(
+      geometry.get(
+        "a",
+        geometrySignature(
+          current,
+          new Map([[author.pubkey, { name: "New author name" }]]),
+        ),
+        900,
+      ),
+    ).toBeUndefined();
+  } finally {
+    owner.dispose();
+  }
+});
