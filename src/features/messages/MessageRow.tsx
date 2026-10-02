@@ -157,7 +157,6 @@ export const MessageRow = memo(function MessageRow({
   onOpenMediaReview,
   agentPubkeys,
 }: MessageRowProps) {
-  const resolveName = useChannelIdentityNames(session, row.channelId);
   const directory = useReferenceDirectory(session, participantProfiles);
   const threadUnread = useThreadUnread(
     row.replyCount > 0 && onOpenThread ? unread : undefined,
@@ -169,6 +168,11 @@ export const MessageRow = memo(function MessageRow({
     row.channelId,
     row.threadRootId ?? row.id,
   );
+  const resolveName = useChannelIdentityNames(session, row.channelId, [
+    row.authorId,
+    ...row.participants,
+    ...threadAgents.map(({ pubkey }) => pubkey),
+  ]);
   const channels = session?.channels;
   const listed = useListedChannel(
     channels,

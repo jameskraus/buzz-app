@@ -14,7 +14,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { Virtualizer, type VirtualizerHandle } from "virtua";
-import { MessageRow } from "./MessageRow";
+import { TimelineMessageRow } from "./TimelineMessageRow";
 import { continuesMessageGroup } from "./message-grouping";
 import type { Attachment, ChannelWindow } from "../relay/contracts";
 import { useRowProfiles } from "../relay/react";
@@ -783,7 +783,7 @@ function Timeline({
                 day={day}
               />
             ) : (
-              <MessageRow
+              <TimelineMessageRow
                 layout={
                   continuesMessageGroup(rows[index - 1], row)
                     ? "continuation"
@@ -795,9 +795,6 @@ function Timeline({
                 row={row}
                 unread={queries.unread}
                 extensions={extensions}
-                profile={profiles.get(row.authorId)}
-                participantProfiles={profiles}
-                agentPubkeys={agentPubkeys}
                 media={queries.media}
                 onOpenLink={onOpenLink}
                 canOpenLink={canOpenLink}

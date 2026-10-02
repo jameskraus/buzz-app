@@ -131,7 +131,7 @@ export function ReferenceText({
   channelId?: string | undefined;
   interactive?: boolean;
 }) {
-  const resolveName = useChannelIdentityNames(session, channelId);
+  const resolveName = useChannelIdentityNames(session, channelId, mentions);
   const references = messageReferences(
     text,
     mentions,

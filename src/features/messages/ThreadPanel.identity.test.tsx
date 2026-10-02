@@ -120,17 +120,11 @@ it("retains mounted rows through a deferred real-session page and profile noise"
   expect(screen.queryByText("Loading thread…")).not.toBeInTheDocument();
   bodyRender.mockClear();
 
-  // An unrelated signed profile preserves the selected map, but the shared
-  // name service still invalidates every mounted row. Do not claim zero renders.
+  // Both the selected profiles and the rows' displayed names are unchanged.
   await act(async () => {
     traffic.receive([profile(keypair(), { name: "Other" })]);
   });
-  expect(bodyRender.mock.calls).toEqual([
-    ["Root body"],
-    ["Root body"],
-    ["Reply body"],
-    ["Reply body"],
-  ]);
+  expect(bodyRender).not.toHaveBeenCalled();
   bodyRender.mockClear();
 
   const appended = message(bobKey, "a", "Appended reply body", 3, [

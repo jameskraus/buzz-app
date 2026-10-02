@@ -7,6 +7,7 @@ import {
   useContext,
   useMemo,
   useState,
+  useSyncExternalStore,
   type ComponentPropsWithoutRef,
   type ReactNode,
 } from "react";
@@ -361,7 +362,6 @@ export function MessageMarkdown({
   largeEmoji?: boolean | undefined;
   interactive?: boolean;
 }) {
-  const resolveName = useChannelIdentityNames(session, row.channelId);
   const prepared = useMemo(() => prepareMarkdown(row.content), [row.content]);
   if (prepared.kind === "plain")
     return <div className={styles.plainText}>{prepared.content}</div>;
@@ -377,7 +377,6 @@ export function MessageMarkdown({
       onOpenLink={onOpenLink}
       canOpenLink={canOpenLink}
       participantProfiles={participantProfiles}
-      resolveName={resolveName}
       largeEmoji={largeEmoji}
       interactive={interactive}
     />
@@ -395,12 +394,10 @@ function PreparedMessageMarkdown({
   onOpenLink,
   canOpenLink,
   participantProfiles,
-  resolveName,
   largeEmoji = false,
   interactive = true,
 }: Parameters<typeof MessageMarkdown>[0] & {
   prepared: Extract<ReturnType<typeof prepareMarkdown>, { kind: "markdown" }>;
-  resolveName: (pubkey: string, fallback: string) => string;
 }) {
   const row =
     prepared.content === sourceRow.content
@@ -496,10 +493,11 @@ function PreparedMessageMarkdown({
   // Reuse the same control and availability gate as bound prose mentions.
   const renderProfile = (text: unknown, target: unknown) => {
     const key = typeof target === "string" ? profileKey(target) : undefined;
-    const agent =
-      !!key &&
+    const agent = !!(
+      key &&
       (directory.agents.some((agent) => agent.pubkey === key) ||
-        (participantProfiles ?? directory.profiles).get(key)?.isAgent);
+        (participantProfiles ?? directory.profiles).get(key)?.isAgent)
+    );
     const clickable =
       interactive && typeof target === "string" && !!canOpenLink?.(target);
     if (
@@ -507,27 +505,17 @@ function PreparedMessageMarkdown({
       typeof target === "string" &&
       (!interactive || clickable || agent)
     ) {
-      const label = key ? resolveName(key, text.slice(1)) : text.slice(1);
-      const Icon = agent ? RobotIcon : AtIcon;
-      const Mention = clickable ? "button" : "span";
       return (
-        <Mention
-          type={clickable ? "button" : undefined}
-          className={referenceStyles.link}
-          data-mention-kind={agent ? "agent" : "person"}
-          aria-label={clickable ? `View ${label} profile` : undefined}
-          onClick={
-            clickable
-              ? (event) => {
-                  event.currentTarget.focus();
-                  onOpenLink(target);
-                }
-              : undefined
-          }
-        >
-          <Icon aria-hidden="true" className={referenceStyles.icon} />
-          {label}
-        </Mention>
+        <ProfileReference
+          pubkey={key}
+          fallback={text.slice(1)}
+          target={target}
+          agent={agent}
+          clickable={clickable}
+          session={session}
+          channelId={row.channelId}
+          onOpenLink={onOpenLink}
+        />
       );
     }
     return undefined;
@@ -599,6 +587,65 @@ function PreparedMessageMarkdown({
     </MessageComponentsContext>
   );
   return largeEmoji ? markdown : <div className={styles.text}>{markdown}</div>;
+}
+
+const noProfileSubscription = () => () => {};
+const noAgentProfile = () => undefined;
+
+/** Subscribe at the parsed identity, including explicit links without signed p tags. */
+function ProfileReference({
+  pubkey,
+  fallback,
+  target,
+  agent,
+  clickable,
+  session,
+  channelId,
+  onOpenLink,
+}: {
+  pubkey: string | undefined;
+  fallback: string;
+  target: string;
+  agent: boolean;
+  clickable: boolean;
+  session: RelaySession | undefined;
+  channelId: string;
+  onOpenLink(url: string): boolean;
+}) {
+  const resolveName = useChannelIdentityNames(
+    session,
+    channelId,
+    pubkey ? [pubkey] : [],
+  );
+  const profileAgent = useSyncExternalStore(
+    session?.profiles.subscribe ?? noProfileSubscription,
+    () =>
+      pubkey ? session?.profiles.snapshot().get(pubkey)?.isAgent : undefined,
+    noAgentProfile,
+  );
+  const label = pubkey ? resolveName(pubkey, fallback) : fallback;
+  const isAgent = agent || profileAgent;
+  const Icon = isAgent ? RobotIcon : AtIcon;
+  const Mention = clickable ? "button" : "span";
+  return (
+    <Mention
+      type={clickable ? "button" : undefined}
+      className={referenceStyles.link}
+      data-mention-kind={isAgent ? "agent" : "person"}
+      aria-label={clickable ? `View ${label} profile` : undefined}
+      onClick={
+        clickable
+          ? (event) => {
+              event.currentTarget.focus();
+              onOpenLink(target);
+            }
+          : undefined
+      }
+    >
+      <Icon aria-hidden="true" className={referenceStyles.icon} />
+      {label}
+    </Mention>
+  );
 }
 
 const MarkdownBody = memo(function MarkdownBody({
