@@ -25,13 +25,10 @@ type EdgeTarget = {
   attention: boolean;
 };
 type Edges = { above: EdgeTarget[]; below: EdgeTarget[] };
+type UnreadTarget = EdgeTarget & { anchor: Element };
 
-/** Geometry over rendered unread destinations, not another unread store. */
-function unreadEdges(list: HTMLElement): Edges {
-  const edges: Edges = { above: [], below: [] };
-  const visible = new Set<string>();
-  const viewport = list.getBoundingClientRect();
-  if (!list.clientHeight || !viewport.width) return edges;
+function unreadTargets(list: HTMLElement): UnreadTarget[] {
+  const targets: UnreadTarget[] = [];
   const rows = new Set<HTMLButtonElement>();
   for (const marker of list.querySelectorAll(
     "[data-channel-unread], [data-channel-activity]",
@@ -48,17 +45,31 @@ function unreadEdges(list: HTMLElement): Edges {
       .closest("[data-sidebar-section]")
       ?.querySelector("details:not([open])");
     const anchor = closed?.querySelector("summary") ?? row;
-    const rect = anchor.getBoundingClientRect();
-    if (!rect.height || !rect.width) continue;
     const attention =
       row.getAttribute("data-channel-type") === "dm" ||
       row.querySelector('[data-priority="true"]') !== null ||
       row.querySelector("[data-channel-activity]") !== null;
-    const target = { row, channelId, attention };
+    targets.push({ row, channelId, attention, anchor });
+  }
+  return targets;
+}
+
+/** Geometry over rendered unread destinations, not another unread store. */
+function unreadEdges(
+  list: HTMLElement,
+  targets?: readonly UnreadTarget[],
+): Edges {
+  const edges: Edges = { above: [], below: [] };
+  const visible = new Set<string>();
+  const viewport = list.getBoundingClientRect();
+  if (!list.clientHeight || !viewport.width) return edges;
+  for (const { anchor, ...target } of targets ?? unreadTargets(list)) {
+    const rect = anchor.getBoundingClientRect();
+    if (!rect.height || !rect.width) continue;
     if (rect.bottom <= viewport.top) edges.above.push(target);
     else if (rect.top >= viewport.top + list.clientHeight)
       edges.below.push(target);
-    else visible.add(channelId);
+    else visible.add(target.channelId);
   }
   // Count destinations, not repeated rows. Any visible copy wins; otherwise
   // keep the nearest copy for reveal and for the avatar ordering.
@@ -93,9 +104,13 @@ export function SidebarUnread({
     const rows = content.current;
     if (!viewport || !rows) return;
     let frame = 0;
+    let targets: UnreadTarget[] | undefined;
     const measure = () => {
       frame = 0;
-      const next = unreadEdges(viewport);
+      // DOM membership changes only through mutations; geometry stays live.
+      if (mutations.takeRecords().length) targets = undefined;
+      targets ??= unreadTargets(viewport);
+      const next = unreadEdges(viewport, targets);
       setEdges((previous) =>
         (["above", "below"] as const).every(
           (edge) =>
@@ -117,13 +132,17 @@ export function SidebarUnread({
     const resize = new ResizeObserver(schedule);
     resize.observe(viewport);
     resize.observe(rows);
-    const mutations = new MutationObserver(schedule);
+    const mutations = new MutationObserver(() => {
+      targets = undefined;
+      schedule();
+    });
     mutations.observe(rows, {
       subtree: true,
       childList: true,
       attributes: true,
       attributeFilter: [
         "open",
+        "data-sidebar-section",
         "data-channel-unread",
         "data-channel-activity",
         "data-channel-type",
