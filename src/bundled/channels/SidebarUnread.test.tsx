@@ -251,3 +251,102 @@ it("removes both counts and previews when unread markers disappear", async () =>
   expect(surface).not.toHaveAttribute("inert");
   expect(surface).toHaveAttribute("data-visible", "true");
 });
+
+it("updates reused destinations after attribute changes, including a now-visible duplicate", async () => {
+  const view = render(
+    <SidebarUnread>
+      {row("visible", 150)}
+      {row("near", 340)}
+      {row("far", 400)}
+    </SidebarUnread>,
+  );
+  await measure();
+  const near = screen.getByRole("button", { name: "near" });
+  const navigation = screen.getByRole("navigation");
+  // Attribute changes reuse the actual row and marker nodes. The next frame
+  // must see them even if the mutation callback has not run yet.
+  near.querySelector("[data-channel-activity]")?.remove();
+  screen
+    .getByRole("button", { name: "far" })
+    .querySelector("[data-channel-activity]")
+    ?.remove();
+  fireEvent.scroll(navigation);
+  await measure();
+  const cue = screen.getByRole("button", {
+    name: "2 unread conversations below",
+  });
+  expect(cue).toHaveAttribute("data-attention", "false");
+  near.setAttribute("data-channel-type", "dm");
+  fireEvent.scroll(navigation);
+  await measure();
+  expect(cue).toHaveAttribute("data-attention", "true");
+  near.removeAttribute("data-channel-type");
+  near
+    .querySelector("[data-channel-unread]")
+    ?.setAttribute("data-priority", "true");
+  fireEvent.scroll(navigation);
+  await measure();
+  expect(cue).toHaveAttribute("data-attention", "true");
+  near.setAttribute("data-channel-id", "visible");
+  fireEvent.scroll(navigation);
+  await measure();
+  expect(cue).toHaveAccessibleName("1 unread conversation below");
+  expect(cue).toHaveAttribute("data-attention", "false");
+  fireEvent.click(cue);
+  await measure();
+  expect(screen.getByRole("button", { name: "far" })).toHaveFocus();
+  view.unmount();
+  expect(frames.size).toBe(0);
+});
+
+it("uses current placement at activation before a pending measurement, then follows disclosure changes", async () => {
+  const selected = vi.fn();
+  render(
+    <SidebarUnread>
+      <section data-sidebar-section="group">
+        <details open>
+          <summary data-top="50">Group</summary>
+          {row("near", 340, selected)}
+        </details>
+      </section>
+      {row("far", 400, selected)}
+    </SidebarUnread>,
+  );
+  await measure();
+  const near = screen.getByRole("button", { name: "near" });
+  const far = screen.getByRole("button", { name: "far" });
+  const cue = screen.getByRole("button", {
+    name: "2 unread conversations below",
+  });
+  // Move an existing node, then activate synchronously before either observer
+  // delivery or a frame. Focus must use the current DOM order.
+  near.parentElement?.insertBefore(far, near);
+  fireEvent.click(cue);
+  await measure();
+  expect(far).toHaveFocus();
+  expect(selected).not.toHaveBeenCalled();
+  const disclosure = document.querySelector("details");
+  if (!disclosure) throw new Error("Missing disclosure");
+  disclosure.open = false;
+  fireEvent.scroll(screen.getByRole("navigation"));
+  await measure();
+  expect(
+    screen.getByRole("button", { name: "2 unread conversations above" }),
+  ).toBeInTheDocument();
+  expect(cue).toHaveAccessibleName("0 unread conversations below");
+  const section = disclosure.parentElement;
+  section?.removeAttribute("data-sidebar-section");
+  fireEvent.scroll(screen.getByRole("navigation"));
+  await measure();
+  expect(cue).toHaveAccessibleName("2 unread conversations below");
+  section?.setAttribute("data-sidebar-section", "group");
+  disclosure.open = true;
+  // A resize/scroll changes geometry without changing the destination nodes.
+  far.dataset.top = "150";
+  fireEvent.scroll(screen.getByRole("navigation"));
+  await measure();
+  expect(cue).toHaveAccessibleName("1 unread conversation below");
+  fireEvent.click(cue);
+  await measure();
+  expect(near).toHaveFocus();
+});
