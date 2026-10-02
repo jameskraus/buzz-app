@@ -4,7 +4,7 @@ import { createRelaySession } from "../relay/session";
 import { foldMessages } from "../relay/fold";
 import { keypair, message } from "../relay/testing";
 
-it("invalidates geometry for changed content, profiles, width, session, and history eviction", () => {
+it("invalidates geometry for changed content, profiles, width, session, and cache eviction", () => {
   const first = createRelaySession(null),
     second = createRelaySession(null);
   const a = geometryFor(first.session.channels),
@@ -15,7 +15,18 @@ it("invalidates geometry for changed content, profiles, width, session, and hist
   expect(a.get("a", "v2", 900)).toBeUndefined();
   expect(a.get("a", "v1", 901)).toBeUndefined();
   expect(b.get("a", "v1", 900)).toBeUndefined();
-  for (const id of ["b", "c", "d"]) a.set(id, "v1", 900, cache);
+  for (const id of ["b", "c", "d", "e", "f", "g", "h"])
+    a.set(id, "v1", 900, cache);
+  expect(a.get("a", "v1", 900)).toBe(cache);
+  // Revisiting refreshes the saved measurements; the ninth view drops the oldest.
+  a.set("a", "v1", 900, cache);
+  a.set("i", "v1", 900, cache);
+  expect(a.get("b", "v1", 900)).toBeUndefined();
+  expect(a.get("c", "v1", 900)).toBe(cache);
+  expect(a.get("a", "v1", 900)).toBe(cache);
+  const oversized = "x".repeat(256 * 1024 + 1);
+  a.set("a", oversized, 900, cache);
+  expect(a.get("a", oversized, 900)).toBeUndefined();
   expect(a.get("a", "v1", 900)).toBeUndefined();
   const author = keypair();
   const rows = foldMessages("a", "relay", [message(author, "a", "hello", 20)]);

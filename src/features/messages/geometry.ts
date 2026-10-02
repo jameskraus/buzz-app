@@ -30,7 +30,7 @@ export function geometryFor(queries: ChannelQueries) {
       // Signatures include rendered text; bound that memory too, not only view count.
       if (signature.length > 256 * 1024) return;
       entries.set(channelId, { signature, width, cache });
-      while (entries.size > 3) {
+      while (entries.size > 8) {
         const first = entries.keys().next().value;
         if (first === undefined) break;
         entries.delete(first);

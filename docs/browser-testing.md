@@ -307,8 +307,8 @@ and channel. Cold or oversized geometry uses the saved message ID and its row Y
 with Virtua's index-based scrolling. Old offset-only records and anchors no longer
 in the retained window fall back to the saved offset; this may clamp and cannot
 promise the same message. No extra history is loaded just to recover an anchor.
-Measured geometry stays in memory, with the unchanged three-entry / 256KiB
-signature limits in `src/features/messages/geometry.ts`.
+Measured geometry stays in memory, with at most eight entries and 262,144 UTF-16
+code units per signature in `src/features/messages/geometry.ts`.
 
 Panel opening/closing and viewport resizing preserve bottom intent or the visible
 reading anchor. Restoration-generated scrolls retain that message while its row

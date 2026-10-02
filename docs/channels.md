@@ -972,7 +972,9 @@ The port retains the prepared-store implementation and its behavior tests:
   eight 128-channel confirmation reads; metadata failure preserves successful
   membership evidence and earlier name batches.
 - Conventional top-down virtua timeline, prepend anchoring, near-bottom following,
-  and three cached geometries keyed by session, channel, content, profiles, and width.
+  and eight cached geometries keyed by session, channel, content, profiles, and width.
+  These inert measurements can survive folded-window eviction when the retained
+  head still matches; they do not increase history retention or live catch-up work.
 
 Connection generations and store epochs reject late results after disconnect,
 replacement, disposal, or access revocation. The data service outlives plugin
