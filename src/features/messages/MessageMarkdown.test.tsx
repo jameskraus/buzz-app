@@ -211,7 +211,7 @@ second
 });
 
 describe("mounted Markdown preparation", () => {
-  it("reuses pure preparation for equivalent rows and invalidates for edited text", () => {
+  it("reuses pure preparation across retained-row remounts and invalidates for edits", () => {
     const scan = vi.spyOn(messageContent, "scanMarkdown");
     const initial = props("**first**");
     const view = renderDom(
@@ -225,20 +225,28 @@ describe("mounted Markdown preparation", () => {
     expect(initialRenders).toBeGreaterThan(0);
     expect(screen.getByText("first")).toHaveTextContent("first");
 
+    const replacement: ChannelMessage = {
+      ...initial.row,
+      delivery: "seen",
+      reactions: [{ content: "👍", events: [] }],
+    };
     view.rerender(
       <StrictMode>
-        <MessageMarkdown
-          {...initial}
-          row={{
-            ...initial.row,
-            delivery: "seen",
-            reactions: [{ content: "👍", events: [] }],
-          }}
-        />
+        <MessageMarkdown {...initial} row={replacement} />
       </StrictMode>,
     );
     expect(scan).toHaveBeenCalledTimes(initialScans);
     expect(markdownRenders).toHaveBeenCalledTimes(initialRenders);
+
+    // Virtualization disposes the body while retaining the projected row.
+    view.rerender(<StrictMode />);
+    view.rerender(
+      <StrictMode>
+        <MessageMarkdown {...initial} row={replacement} />
+      </StrictMode>,
+    );
+    expect(screen.getByText("first")).toBeInTheDocument();
+    expect(scan).toHaveBeenCalledTimes(initialScans);
 
     view.rerender(
       <StrictMode>
@@ -253,6 +261,43 @@ describe("mounted Markdown preparation", () => {
     expect(screen.getByText("second")).toBeInTheDocument();
     expect(screen.queryByText("first")).not.toBeInTheDocument();
   });
+
+  it.each([false, true])(
+    "refreshes mutable runtime content (remount=%s)",
+    (remount) => {
+      const initial = props("**first**");
+      const row = { ...initial.row };
+      const view = renderDom(<MessageMarkdown {...initial} row={row} />);
+      expect(
+        screen.getByText("first", { selector: "strong" }),
+      ).toBeInTheDocument();
+
+      // App projections are immutable. An adversarial mutable runtime value must
+      // still not let a weak-key hit authorize stale text.
+      if (remount) view.rerender(null);
+      row.content = "_second_";
+      view.rerender(<MessageMarkdown {...initial} row={row} />);
+      expect(
+        screen.getByText("second", { selector: "em" }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText("first")).toBeNull();
+
+      view.rerender(null);
+      row.content = `${"a".repeat(MAX_MARKDOWN_LENGTH + 1)} **literal**`;
+      view.rerender(<MessageMarkdown {...initial} row={row} />);
+      expect(screen.getByText(/\*\*literal\*\*/)).toBeInTheDocument();
+      expect(screen.queryByText("second")).toBeNull();
+      expect(view.container.querySelector("strong")).toBeNull();
+
+      view.rerender(null);
+      row.content = "**fresh**";
+      view.rerender(<MessageMarkdown {...initial} row={row} />);
+      expect(
+        screen.getByText("fresh", { selector: "strong" }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/literal/)).toBeNull();
+    },
+  );
 
   it("updates live plugin, media, directory, and interactivity inputs without reparsing", () => {
     const metadataRenderer: Contribution<InlineRenderer> = {
@@ -290,7 +335,16 @@ describe("mounted Markdown preparation", () => {
     expect(screen.getByRole("link", { name: "#first" })).toBeInTheDocument();
     expect(screen.getByText("0:first-media")).toBeInTheDocument();
 
+    // Metadata-only replacements still reach a renderer whose match/text did
+    // not change. A body-only memo key would leave the old reply count here.
     view.rerender(
+      <MessageMarkdown {...initial} row={{ ...initial.row, replyCount: 3 }} />,
+    );
+    expect(screen.getByText("3:first-media")).toBeInTheDocument();
+    expect(screen.queryByText("0:first-media")).not.toBeInTheDocument();
+    expect(markdownRenders).toHaveBeenCalledTimes(initialRenders);
+
+    const updated = (
       <MessageMarkdown
         {...initial}
         row={{ ...initial.row, replyCount: 7 }}
@@ -301,12 +355,30 @@ describe("mounted Markdown preparation", () => {
           agents: [],
           channels: [{ id: "design", name: "second", channelType: "forum" }],
         }}
-      />,
+      />
     );
+    view.rerender(updated);
     expect(markdownRenders).toHaveBeenCalledTimes(initialRenders);
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(screen.getByText("#second")).toBeInTheDocument();
     expect(screen.getByText("7:second-media")).toBeInTheDocument();
+
+    view.rerender(null);
+    view.rerender(
+      <MessageMarkdown
+        {...initial}
+        media={() => "third-media"}
+        directory={{
+          profiles: new Map(),
+          agents: [],
+          channels: [{ id: "design", name: "third", channelType: "forum" }],
+        }}
+      />,
+    );
+    const remountedRenders = markdownRenders.mock.calls.length;
+    expect(remountedRenders).toBeGreaterThan(initialRenders);
+    expect(screen.getByRole("link", { name: "#third" })).toBeInTheDocument();
+    expect(screen.getByText("0:third-media")).toBeInTheDocument();
 
     view.rerender(
       <MessageMarkdown
@@ -315,9 +387,66 @@ describe("mounted Markdown preparation", () => {
         extensions={undefined}
       />,
     );
-    expect(markdownRenders).toHaveBeenCalledTimes(initialRenders);
-    expect(screen.queryByText("7:second-media")).not.toBeInTheDocument();
+    expect(markdownRenders).toHaveBeenCalledTimes(remountedRenders);
+    expect(screen.queryByText("0:third-media")).not.toBeInTheDocument();
     expect(screen.getByText("PLUGIN")).toBeInTheDocument();
+  });
+
+  it("refreshes navigation and availability without changing a mounted body", () => {
+    const first = vi.fn(() => false);
+    const current = vi.fn(() => true);
+    const initial = props("Hello **@Mic** and https://example.com/current", {
+      onOpenLink: first,
+    });
+    const view = renderDom(
+      <StrictMode>
+        <MessageMarkdown {...initial} />
+      </StrictMode>,
+    );
+    const mention = screen.getByRole("button", { name: "View Mic profile" });
+    fireEvent.click(mention);
+    expect(first).toHaveBeenCalledWith(profileTarget(mic));
+
+    view.rerender(
+      <StrictMode>
+        <MessageMarkdown {...initial} onOpenLink={current} />
+      </StrictMode>,
+    );
+    expect(document.activeElement).toBe(mention);
+    fireEvent.click(mention);
+    fireEvent.click(
+      screen.getByRole("link", { name: "https://example.com/current" }),
+    );
+    expect(current.mock.calls).toEqual([
+      [profileTarget(mic)],
+      ["https://example.com/current"],
+    ]);
+    expect(first).toHaveBeenCalledTimes(1);
+
+    view.rerender(<StrictMode />);
+    view.rerender(
+      <StrictMode>
+        <MessageMarkdown {...initial} onOpenLink={current} />
+      </StrictMode>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "View Mic profile" }));
+    expect(current).toHaveBeenLastCalledWith(profileTarget(mic));
+    expect(current).toHaveBeenCalledTimes(3);
+    expect(first).toHaveBeenCalledTimes(1);
+
+    view.rerender(
+      <StrictMode>
+        <MessageMarkdown
+          {...initial}
+          onOpenLink={current}
+          canOpenLink={() => false}
+        />
+      </StrictMode>,
+    );
+    expect(
+      screen.queryByRole("button", { name: "View Mic profile" }),
+    ).toBeNull();
+    expect(screen.getByText(/@Mic/)).toBeInTheDocument();
   });
 
   it("invalidates protected prose when live identity and security inputs change", () => {

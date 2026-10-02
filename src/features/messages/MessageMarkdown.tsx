@@ -336,6 +336,14 @@ const markdownComponents: Components = {
   span: (props) => useMessageComponents().span(props),
 };
 
+// Virtualized bodies remount while projection rows remain retained. Cache only
+// immutable text preparation; live names, media, renderers and actions bind below.
+// Entries can live as long as a retained row, and disappear with its weak key.
+const preparedRows = new WeakMap<
+  ChannelMessage,
+  { source: string; prepared: ReturnType<typeof prepareMarkdown> }
+>();
+
 export function MessageMarkdown({
   row,
   directory = emptyReferenceDirectory,
@@ -362,7 +370,15 @@ export function MessageMarkdown({
   interactive?: boolean;
 }) {
   const resolveName = useChannelIdentityNames(session, row.channelId);
-  const prepared = useMemo(() => prepareMarkdown(row.content), [row.content]);
+  // Pure output depends only on raw content; row identity is a cache hint.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: metadata-only row replacements reuse the same preparation
+  const prepared = useMemo(() => {
+    const cached = preparedRows.get(row);
+    return cached?.source === row.content
+      ? cached.prepared
+      : prepareMarkdown(row.content);
+  }, [row.content]);
+  preparedRows.set(row, { source: row.content, prepared });
   if (prepared.kind === "plain")
     return <div className={styles.plainText}>{prepared.content}</div>;
   return (
