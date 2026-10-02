@@ -1,7 +1,7 @@
 import { useIdentityNames } from "../../features/identity-names/react";
 import type { IdentityNameView } from "../../features/identity-names/service";
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
-import type { ChannelSummary } from "../../features/relay/contracts";
+import type { ChannelSummary, Profile } from "../../features/relay/contracts";
 import type { ProfileQueries } from "../../features/relay/profile-directory";
 import { selectProfiles } from "../../features/relay/profile-selection";
 
@@ -47,13 +47,27 @@ export function useChannelLabels(
       void queries.ensure(missing.split(":"), "background").catch(() => {});
   }, [queries, missing, membership]);
   const labelled = useRef(
-    new WeakMap<ChannelSummary, { name: string; channel: ChannelSummary }>(),
+    new WeakMap<
+      ChannelSummary,
+      {
+        name: string;
+        channel: ChannelSummary;
+        profiles: ReadonlyMap<string, Profile>;
+        resolveName: typeof resolveName;
+      }
+    >(),
   );
   const labelledChannels = useMemo(
     () =>
       channels.map((channel) => {
         if (channel.channelType !== "dm" || !channel.participants)
           return channel;
+        const previous = labelled.current.get(channel);
+        if (
+          previous?.profiles === profiles &&
+          previous.resolveName === resolveName
+        )
+          return previous.channel;
         const name = channel.participants.length
           ? channel.participants
               .map((id) =>
@@ -65,10 +79,14 @@ export function useChannelLabels(
               )
               .join(", ")
           : "Notes to self";
-        const previous = labelled.current.get(channel);
-        if (previous?.name === name) return previous.channel;
-        const result = { ...channel, name };
-        labelled.current.set(channel, { name, channel: result });
+        const result =
+          previous?.name === name ? previous.channel : { ...channel, name };
+        labelled.current.set(channel, {
+          name,
+          channel: result,
+          profiles,
+          resolveName,
+        });
         return result;
       }),
     [channels, profiles, resolveName],

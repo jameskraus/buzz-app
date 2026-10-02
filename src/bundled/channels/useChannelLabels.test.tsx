@@ -1,6 +1,6 @@
-import { afterEach, expect, it, vi } from "vitest";
-import { act, createElement } from "react";
-import { createRoot } from "react-dom/client";
+// @vitest-environment jsdom
+import { afterEach, expect, it } from "vitest";
+import { act, cleanup, render } from "@testing-library/react";
 import { useChannelLabels } from "./useChannelLabels";
 import { useChannelList } from "../../features/relay/react";
 import { createRelaySession } from "../../features/relay/session";
@@ -15,36 +15,7 @@ import {
   signed,
 } from "../../features/relay/testing";
 
-// The probe renders no host elements, so this inert container is sufficient.
-// React DOM itself runs effects and unmount; neither the hook nor its store
-// is mocked. Real-browser interaction is a separate check.
-function container() {
-  const win = { HTMLIFrameElement: class {}, event: undefined };
-  const doc = {
-    nodeType: 9,
-    addEventListener() {},
-    removeEventListener() {},
-    defaultView: win,
-    activeElement: null,
-  };
-  const node = {
-    nodeType: 1,
-    tagName: "DIV",
-    nodeName: "DIV",
-    namespaceURI: "http://www.w3.org/1999/xhtml",
-    ownerDocument: doc,
-    addEventListener() {},
-    removeEventListener() {},
-    textContent: "",
-    firstChild: null,
-  };
-  Object.assign(doc, { documentElement: node, body: node });
-  vi.stubGlobal("window", win);
-  vi.stubGlobal("document", doc);
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  return node as unknown as HTMLElement;
-}
-afterEach(() => vi.unstubAllGlobals());
+afterEach(cleanup);
 
 it.each([
   { outcome: "found", loaded: true },
@@ -88,9 +59,9 @@ it.each([
       selectedProfiles = selected.profiles;
       return null;
     }
-    const root = createRoot(container());
+    const view = render(null);
     try {
-      await act(async () => root.render(createElement(Probe)));
+      await act(async () => view.rerender(<Probe />));
       await act(async () => {
         wire.next().respond([
           dm,
@@ -173,11 +144,11 @@ it.each([
       await act(async () => {
         incoming([message(viewer, "dm", "ordinary traffic", 1_700_000_002)]);
         await flush();
-        root.render(createElement(Probe));
+        view.rerender(<Probe />);
       });
       expect(wire.pending).toHaveLength(0);
     } finally {
-      await act(async () => root.unmount());
+      view.unmount();
       owner.dispose();
     }
   },
@@ -204,7 +175,7 @@ it("retains a labelled DM across roster and profile recomputations until its sou
     subscribe: () => () => {},
     ensure: () => Promise.resolve(),
   } as unknown as import("../../features/relay/profile-directory").ProfileQueries;
-  const names = {
+  let names = {
     resolve: (_id: string, _fallback: string) => resolvedName,
     subscribe: (listener: () => void) => {
       subscribers.add(listener);
@@ -217,12 +188,19 @@ it("retains a labelled DM across roster and profile recomputations until its sou
     labels = useChannelLabels(roster, queries, names).channels;
     return null;
   }
-  const root = createRoot(container());
+  const view = render(null);
   try {
-    await act(async () => root.render(createElement(Probe)));
+    await act(async () => view.rerender(<Probe />));
     const first = labels[0];
     roster = [dm, { ...other, name: "Changed" }];
-    await act(async () => root.render(createElement(Probe)));
+    await act(async () => view.rerender(<Probe />));
+    expect(labels[0]).toBe(first);
+    // An unrelated naming revision may leave this label unchanged. Reuse its
+    // output, but the next actual name update must still resolve current data.
+    await act(async () => {
+      revision++;
+      for (const listener of subscribers) listener();
+    });
     expect(labels[0]).toBe(first);
     resolvedName = "Alicia";
     await act(async () => {
@@ -233,10 +211,18 @@ it("retains a labelled DM across roster and profile recomputations until its sou
     expect(labels[0]?.name).toBe("Alicia");
     const renamed = labels[0];
     roster = [{ ...dm, updatedAt: 1 }, other];
-    await act(async () => root.render(createElement(Probe)));
+    await act(async () => view.rerender(<Probe />));
     expect(labels[0]).not.toBe(renamed);
     expect(labels[0]?.updatedAt).toBe(1);
+    // Session replacement can reuse roster values and revision numbers; the
+    // provider identity, not only its revision, distinguishes those scopes.
+    names = { ...names, resolve: () => "Alice in another community" };
+    await act(async () => view.rerender(<Probe />));
+    expect(labels[0]?.name).toBe("Alice in another community");
+    roster = [{ ...dm, participants: [] }, other];
+    await act(async () => view.rerender(<Probe />));
+    expect(labels[0]?.name).toBe("Notes to self");
   } finally {
-    await act(async () => root.unmount());
+    view.unmount();
   }
 });
