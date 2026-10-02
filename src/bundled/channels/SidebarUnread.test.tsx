@@ -276,25 +276,36 @@ it("updates reused destinations after attribute changes, including a now-visible
     name: "2 unread conversations below",
   });
   expect(cue).toHaveAttribute("data-attention", "false");
-  near.setAttribute("data-channel-type", "dm");
-  fireEvent.scroll(navigation);
+  // Normal mutation delivery must invalidate the cache and schedule its own
+  // measurement, independently of the scroll-before-delivery path above.
+  await act(async () => {
+    near.setAttribute("data-channel-type", "dm");
+  });
   await measure();
   expect(cue).toHaveAttribute("data-attention", "true");
-  near.removeAttribute("data-channel-type");
-  near
-    .querySelector("[data-channel-unread]")
-    ?.setAttribute("data-priority", "true");
-  fireEvent.scroll(navigation);
+  await act(async () => {
+    near.removeAttribute("data-channel-type");
+  });
+  await measure();
+  expect(cue).toHaveAttribute("data-attention", "false");
+  await act(async () => {
+    near
+      .querySelector("[data-channel-unread]")
+      ?.setAttribute("data-priority", "true");
+  });
   await measure();
   expect(cue).toHaveAttribute("data-attention", "true");
-  near.setAttribute("data-channel-id", "visible");
-  fireEvent.scroll(navigation);
+  await act(async () => {
+    near.setAttribute("data-channel-id", "visible");
+  });
   await measure();
   expect(cue).toHaveAccessibleName("1 unread conversation below");
   expect(cue).toHaveAttribute("data-attention", "false");
   fireEvent.click(cue);
   await measure();
   expect(screen.getByRole("button", { name: "far" })).toHaveFocus();
+  fireEvent.scroll(navigation);
+  expect(frames.size).toBeGreaterThan(0);
   view.unmount();
   expect(frames.size).toBe(0);
 });
@@ -327,20 +338,28 @@ it("uses current placement at activation before a pending measurement, then foll
   expect(selected).not.toHaveBeenCalled();
   const disclosure = document.querySelector("details");
   if (!disclosure) throw new Error("Missing disclosure");
-  disclosure.open = false;
-  fireEvent.scroll(screen.getByRole("navigation"));
+  await act(async () => {
+    disclosure.open = false;
+  });
   await measure();
   expect(
     screen.getByRole("button", { name: "2 unread conversations above" }),
   ).toBeInTheDocument();
   expect(cue).toHaveAccessibleName("0 unread conversations below");
   const section = disclosure.parentElement;
-  section?.removeAttribute("data-sidebar-section");
+  await act(async () => {
+    section?.removeAttribute("data-sidebar-section");
+  });
   fireEvent.scroll(screen.getByRole("navigation"));
   await measure();
   expect(cue).toHaveAccessibleName("2 unread conversations below");
-  section?.setAttribute("data-sidebar-section", "group");
-  disclosure.open = true;
+  await act(async () => {
+    section?.setAttribute("data-sidebar-section", "group");
+    disclosure.open = true;
+  });
+  fireEvent.scroll(screen.getByRole("navigation"));
+  await measure();
+  expect(cue).toHaveAccessibleName("2 unread conversations below");
   // A resize/scroll changes geometry without changing the destination nodes.
   far.dataset.top = "150";
   fireEvent.scroll(screen.getByRole("navigation"));
