@@ -121,6 +121,10 @@ function mount(
       props = { ...props, ...change };
       view.rerender(tree());
     },
+    removeThreadCallback() {
+      delete props.onOpenThread;
+      view.rerender(tree());
+    },
     rows(next: readonly ChannelMessage[]) {
       props = { ...props, window: { ...props.window, rows: next } };
       view.rerender(tree());
@@ -164,7 +168,7 @@ it("uses current same-channel callbacks and link capability while rows stay unch
   ).toBeNull();
   h.update({ canOpenLink: allow });
   expect(profile()).toBeInTheDocument();
-  h.update({ onOpenThread: undefined });
+  h.removeThreadCallback();
   expect(
     within(row(targetId)).queryByRole("button", { name: /View thread:/ }),
   ).toBeNull();
