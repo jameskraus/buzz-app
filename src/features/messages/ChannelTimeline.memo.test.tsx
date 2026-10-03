@@ -7,6 +7,7 @@ import { StrictMode, type ReactElement, type ReactNode } from "react";
 import { stubAvatarBrowserApis } from "../agents/avatar-testing";
 import type { ChannelMessage } from "../relay/contracts";
 import { createRelaySession } from "../relay/session";
+import { scriptedTransport } from "../relay/testing";
 import { ChannelTimeline, type ChannelTimelineProps } from "./ChannelTimeline";
 
 // Model only Virtua's mounted range and pin contract. Real React, rows and
@@ -171,6 +172,77 @@ it("uses current same-channel callbacks and link capability while rows stay unch
   h.removeThreadCallback();
   expect(
     within(row(targetId)).queryByRole("button", { name: /View thread:/ }),
+  ).toBeNull();
+});
+
+it("uses the current media-review callback and session media for unchanged rows", async () => {
+  const transport = () => scriptedTransport(author, "b".repeat(64)).transport;
+  const first = createRelaySession(transport());
+  const next = createRelaySession({
+    ...transport(),
+    media: () => "https://fixture.test/current-session.png",
+  });
+  owners.push(first, next);
+  const attachment = {
+    kind: "image" as const,
+    url: "https://fixture.test/photo.png",
+  };
+  const firstOpen = vi.fn(),
+    nextOpen = vi.fn();
+  const h = mount([{ ...message("media"), attachments: [attachment] }], {
+    queries: first.session,
+    continuityKey: "media-view",
+    onOpenMediaReview: firstOpen,
+  });
+  const opener = () =>
+    within(row("media")).getByRole("link", {
+      name: "Open image attachment",
+    });
+  const user = userEvent.setup();
+  expect(opener().querySelector("img")).toHaveAttribute("src", attachment.url);
+  await user.click(opener());
+  expect(firstOpen).toHaveBeenCalledExactlyOnceWith(
+    "media",
+    attachment,
+    0,
+    false,
+  );
+  h.update({ onOpenMediaReview: nextOpen });
+  await user.click(opener());
+  expect(nextOpen).toHaveBeenCalledExactlyOnceWith(
+    "media",
+    attachment,
+    0,
+    false,
+  );
+  expect(firstOpen).toHaveBeenCalledTimes(1);
+
+  h.update({ queries: next.session });
+  expect(opener().querySelector("img")).toHaveAttribute(
+    "src",
+    "https://fixture.test/current-session.png",
+  );
+  await user.click(opener());
+  expect(nextOpen).toHaveBeenCalledTimes(2);
+  expect(firstOpen).toHaveBeenCalledTimes(1);
+});
+
+it("updates membership attribution when only the current viewer changes", () => {
+  const actor = "b".repeat(64);
+  const membership = {
+    ...message("membership"),
+    membership: { type: "member_joined" as const, actor, target: author },
+  };
+  const h = mount([membership], { viewer: actor });
+  expect(
+    within(row("membership")).getByText("aaaaaaaaaa added by you"),
+  ).toBeInTheDocument();
+  h.update({ viewer: author });
+  expect(
+    within(row("membership")).getByText("You were added by bbbbbbbbbb"),
+  ).toBeInTheDocument();
+  expect(
+    within(row("membership")).queryByText("aaaaaaaaaa added by you"),
   ).toBeNull();
 });
 
