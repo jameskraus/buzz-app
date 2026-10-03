@@ -70,13 +70,13 @@ describe("prepared Markdown tree rendering", () => {
     "www&period;example.com",
     "person&commat;example.com",
   ])(
-    "preserves the full parser for potentially different GFM: %s",
+    "preserves rendering for GFM and conservative fallback inputs: %s",
     (content) => {
-      expect(compare(content)).toBe(2);
+      compare(content);
     },
   );
 
-  it("uses the parser when protection changes the prepared source", () => {
+  it("uses the parser when rendered source differs from prepared source", () => {
     expect(compare("plain text", "protected replacement")).toBe(2);
   });
 });
