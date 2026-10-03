@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { MessageTimestamp } from "./MessageTimestamp";
 
@@ -55,7 +56,7 @@ it("keeps the continuation clock compact without dropping its accessible date", 
   expect(container.querySelector(".sr-only")).toHaveTextContent("2026");
 });
 
-it("refreshes cached styles when default locale or timezone changes", () => {
+it("refreshes cached styles after yielding when default locale or timezone changes", async () => {
   const NativeFormat = Intl.DateTimeFormat;
   let locale = "en-GB";
   let timeZone = "Europe/London";
@@ -90,12 +91,47 @@ it("refreshes cached styles when default locale or timezone changes", () => {
     );
   };
   assertDate();
+  await Promise.resolve();
   timeZone = "America/Los_Angeles";
   rerender(<MessageTimestamp createdAt={date.getTime() / 1000} />);
   assertDate();
+  await Promise.resolve();
   locale = "de-DE";
   rerender(<MessageTimestamp createdAt={date.getTime() / 1000} />);
   assertDate();
+});
+
+it("shares default resolution across rows and rechecks after yielding without rebuilding unchanged formats", async () => {
+  const construct = vi.spyOn(Intl, "DateTimeFormat");
+  const messages = Array.from({ length: 30 }, (_, index) => ({
+    createdAt: 1_790_240_700 + index * 60,
+    compact: index % 2 === 0,
+  }));
+  const rows = (offset: number) => (
+    <StrictMode>
+      {messages.map((message) => (
+        <MessageTimestamp
+          key={message.createdAt}
+          createdAt={message.createdAt + offset}
+          compact={message.compact}
+        />
+      ))}
+    </StrictMode>
+  );
+  const defaultResolutions = () =>
+    construct.mock.calls.filter((args) => args.length === 0).length;
+  const styledFormats = () =>
+    construct.mock.calls.filter((args) => args.length > 0).length;
+  const { container, rerender } = render(rows(0));
+  expect(container.querySelectorAll("time")).toHaveLength(30);
+  expect(defaultResolutions()).toBe(1);
+  const initialStyledFormats = styledFormats();
+  rerender(rows(60));
+  expect(defaultResolutions()).toBe(1);
+  await Promise.resolve();
+  rerender(rows(120));
+  expect(defaultResolutions()).toBe(2);
+  expect(styledFormats()).toBe(initialStyledFormats);
 });
 it("updates the visible clock, accessible date and datetime when a mounted row changes", () => {
   const date = new Date(2026, 8, 24, 9, 5);
