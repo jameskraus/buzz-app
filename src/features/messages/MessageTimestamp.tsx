@@ -1,8 +1,10 @@
 import { Tooltip } from "../../shared/design-system/ui/Tooltip";
 import styles from "./Messages.module.css";
 
-// Retain only the current locale/zone pair, never message content. Resolve the
-// defaults on each render so a running app still follows OS timezone changes.
+// Retain only the current locale/zone pair, never message content. Share default
+// resolution across synchronous renders; after yielding, check again so a
+// running app still follows OS locale/timezone changes on its next render.
+let defaultsChecked = false;
 let formats:
   | {
       locale: string;
@@ -12,6 +14,7 @@ let formats:
     }
   | undefined;
 function timestampFormats() {
+  if (defaultsChecked && formats) return formats;
   const { locale, timeZone } = new Intl.DateTimeFormat().resolvedOptions();
   if (formats?.locale !== locale || formats.timeZone !== timeZone) {
     formats = {
@@ -27,6 +30,10 @@ function timestampFormats() {
       }),
     };
   }
+  defaultsChecked = true;
+  queueMicrotask(() => {
+    defaultsChecked = false;
+  });
   return formats;
 }
 
