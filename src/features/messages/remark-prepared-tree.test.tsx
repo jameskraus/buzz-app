@@ -2,8 +2,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
-import type { Plugin } from "unified";
-import type { Root } from "mdast";
 import { describe, expect, it } from "vitest";
 import { prepareMarkdown } from "./markdown-preparation";
 import { remarkPreparedTree } from "./remark-prepared-tree";
@@ -13,7 +11,9 @@ function compare(source: string, renderedSource = source) {
   if (prepared.kind !== "markdown") throw new Error("expected Markdown");
   const originalTree = structuredClone(prepared.tree);
   let parses = 0;
-  const countParser: Plugin<[], Root> = function () {
+  const countParser = function (
+    this: ThisParameterType<typeof remarkPreparedTree>,
+  ) {
     const parse = this.parser;
     if (!parse) throw new Error("missing Markdown parser");
     this.parser = (document, file) => {
