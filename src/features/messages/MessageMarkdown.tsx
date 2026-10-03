@@ -31,6 +31,7 @@ import Markdown, {
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import { remarkSpoilers } from "./remark-spoilers";
+import { remarkPreparedTree } from "./remark-prepared-tree";
 import type { ConversationExtensions } from "../conversation/contracts";
 import { InlineText } from "../conversation/InlineText";
 import type { ChannelMessage, Profile } from "../relay/contracts";
@@ -595,7 +596,7 @@ function PreparedMessageMarkdown({
 
   const markdown = (
     <MessageComponentsContext value={components}>
-      <MarkdownBody protectedContent={protectedContent} />
+      <MarkdownBody protectedContent={protectedContent} prepared={prepared} />
     </MessageComponentsContext>
   );
   return largeEmoji ? markdown : <div className={styles.text}>{markdown}</div>;
@@ -603,8 +604,10 @@ function PreparedMessageMarkdown({
 
 const MarkdownBody = memo(function MarkdownBody({
   protectedContent,
+  prepared,
 }: {
   protectedContent: ProtectedContent;
+  prepared: Extract<ReturnType<typeof prepareMarkdown>, { kind: "markdown" }>;
 }) {
   return (
     <Markdown
@@ -613,6 +616,7 @@ const MarkdownBody = memo(function MarkdownBody({
         remarkBreaks,
         [remarkSpoilers, `<${protectedContent.prefix}spoiler\uE002>`],
         [remarkInlineContent, protectedContent],
+        [remarkPreparedTree, prepared],
       ]}
       components={markdownComponents}
       skipHtml

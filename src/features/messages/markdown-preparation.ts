@@ -1,4 +1,5 @@
 import { fromMarkdown } from "mdast-util-from-markdown";
+import type { Root } from "mdast";
 import { gfmTable } from "micromark-extension-gfm-table";
 import { gfmTableFromMarkdown } from "mdast-util-gfm-table";
 import { MAX_MARKDOWN_LENGTH, scanMarkdown } from "../relay/message-content";
@@ -22,6 +23,7 @@ export type PreparedMarkdown =
       content: string;
       literalRanges: readonly LiteralRange[];
       spoilerDelimiters: readonly number[];
+      tree: Root | undefined;
     }>;
 
 export const isLiteralMarkdownContext = (type: string) =>
@@ -110,5 +112,12 @@ export function prepareMarkdown(content: string): PreparedMarkdown {
     content: normalized,
     literalRanges: literalRanges(scan.tree, true),
     spoilerDelimiters: spoilerDelimiters(normalized),
+    // Preparation uses CommonMark. Reuse its tree only when GFM cannot add
+    // tables, tasks, footnotes, strikethrough or literal autolinks. This is
+    // intentionally conservative, including syntax inside code/literal spans.
+    // Escapes/entities can manufacture autolinks during GFM decoding.
+    tree: /[~|[@&\\]|:\/\/|www\./i.test(normalized)
+      ? undefined
+      : (scan.tree as Root),
   });
 }

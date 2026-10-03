@@ -69,6 +69,7 @@ const nonIconDependencies = new Set([
   "tailwindcss",
   "typescript",
   "undici",
+  "unified", // Markdown processor plugin types, not an icon catalog.
   "virtua",
   "vite",
   "vitest",
