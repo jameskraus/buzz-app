@@ -677,14 +677,14 @@ function ReadySidebar({
       )
       .catch(() => {});
   };
-  // Compose actual items here; menu availability is their count, not the policy
-  // of any one action. Sibling actions keep their own eligibility checks.
+  // Keep eligibility with each item, but defer JSX construction until a menu
+  // needs it. Closed rows only need the number of available actions.
   const rowActions = (
     channel: ChannelSummary,
     sectionKey: string,
     surface?: ChannelMenuSurface,
   ) => {
-    const actions: ReactNode[] = [];
+    const actions: Array<() => ReactNode> = [];
     if (
       sessionsEnabled &&
       channel.channelType !== "dm" &&
@@ -692,7 +692,7 @@ function ReadySidebar({
       !channel.archived &&
       !channel.readOnly
     ) {
-      actions.push(
+      actions.push(() => (
         <MenuItem
           key="new-session"
           onClick={() => {
@@ -705,8 +705,8 @@ function ReadySidebar({
             <GitBranchIcon size={14} />
           </MenuIcon>
           New session
-        </MenuItem>,
-      );
+        </MenuItem>
+      ));
     }
     if (
       placementWritable &&
@@ -717,8 +717,9 @@ function ReadySidebar({
         ? sectionKey.slice("group:".length)
         : undefined;
       const starred = sectionKey === "starred";
-      if (actions.length) actions.push(<MenuSeparator key="group-actions" />);
-      actions.push(
+      if (actions.length)
+        actions.push(() => <MenuSeparator key="group-actions" />);
+      actions.push(() => (
         <MenuSubmenu key="move-channel">
           <MenuSubmenuTrigger>
             <MenuIcon>
@@ -814,20 +815,20 @@ function ReadySidebar({
               </MenuItem>
             )}
           </MenuSubmenuPopup>
-        </MenuSubmenu>,
-      );
+        </MenuSubmenu>
+      ));
     }
     const muteable =
       queries.sidebarPreferences.muteWritable && !!preferences.data;
     const readable = queries.unread.sync().capability === "frontier-sync";
     if (actions.length && (muteable || readable))
-      actions.push(<MenuSeparator key="attention-separator" />);
+      actions.push(() => <MenuSeparator key="attention-separator" />);
     if (muteable) {
       const intent = mute.intents.get(channel.id);
       const muted = intent?.pending
         ? intent.muted
         : (preferences.data?.muted.includes(channel.id) ?? false);
-      actions.push(
+      actions.push(() => (
         <MenuItem
           key="mute"
           closeOnClick={false}
@@ -838,11 +839,11 @@ function ReadySidebar({
             {muted ? <BellIcon size={14} /> : <BellSlashIcon size={14} />}
           </MenuIcon>
           {muted ? "Unmute" : "Mute"}
-        </MenuItem>,
-      );
+        </MenuItem>
+      ));
     }
     if (readable)
-      actions.push(
+      actions.push(() => (
         <ChannelReadMenuItem
           key="read"
           unread={queries.unread}
@@ -853,22 +854,23 @@ function ReadySidebar({
               ? surface.runRead(action)
               : runReadAction(channel.id, action)
           }
-        />,
-      );
+        />
+      ));
     if (!surface && channel.channelType !== "session" && !channel.archived) {
-      actions.push(
+      const separator = actions.length > 0;
+      actions.push(() => (
         <ChannelLifecycleMenu
           key="lifecycle"
-          separator={actions.length > 0}
+          separator={separator}
           channelId={channel.id}
           lifecycle={lifecycle}
           disabled={!!lifecycleDialog}
           choose={(action) => chooseLifecycle(channel, action)}
-        />,
-      );
+        />
+      ));
     }
     if (channel.channelType === "dm") {
-      actions.push(
+      actions.push(() => (
         <MenuItem
           key="remove-message"
           onClick={() => {
@@ -905,8 +907,8 @@ function ReadySidebar({
             <MinusIcon size={14} />
           </MenuIcon>
           Remove from Messages
-        </MenuItem>,
-      );
+        </MenuItem>
+      ));
     }
     return actions;
   };
@@ -996,7 +998,9 @@ function ReadySidebar({
       const placement = sections.find((section) =>
         section.rows.some((row) => row.id === channel.id),
       );
-      return rowActions(channel, placement?.key ?? "channels", surface);
+      return rowActions(channel, placement?.key ?? "channels", surface).map(
+        (render) => render(),
+      );
     });
   });
   useLayoutEffect(() => () => menuActions?.publish(undefined), [menuActions]);
@@ -1277,7 +1281,7 @@ function ReadySidebar({
                           menuContent={
                             menuOpen ? (
                               <>
-                                {actions}
+                                {actions.map((render) => render())}
                                 {readWrite?.pending && (
                                   <p role="status">Saving…</p>
                                 )}

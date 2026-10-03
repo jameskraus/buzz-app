@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useState } from "react";
 import type { ChannelSummary } from "../../features/relay/contracts";
 
 type Section = { key: string; rows: readonly ChannelSummary[] };
@@ -9,12 +9,12 @@ type RowMenu = {
 };
 
 /** Sidebar-owned menu identity follows rendered placement, not a saved group id. */
-export function useChannelRowMenu(
+export function useChannelRowMenu<Action>(
   sections: readonly Section[],
   actionsFor: (
     channel: ChannelSummary,
     sectionKey: string,
-  ) => readonly ReactNode[],
+  ) => readonly Action[],
 ) {
   const [rowMenu, setRowMenu] = useState<RowMenu>();
   // Clear during render so children cannot commit a stale portal after a move.

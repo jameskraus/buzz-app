@@ -162,7 +162,10 @@ should extend that popup, with a separator only when another action group follow
 props onto the activity button; session disclosure and child rows stay outside.
 The popup and trigger are enabled only when `rowActions` supplies actual items;
 each action owns its eligibility, so Sessions availability never gates sibling
-actions. `useChannelRowMenu` owns channel id, the full rendered section key
+actions. Availability is collected as item factories; closed rows do not construct
+menu JSX. Only the open row and the header's shared action composition materialize
+those items, keeping the same eligibility and order.
+`useChannelRowMenu` owns channel id, the full rendered section key
 (`starred`, `channels`, `group:<id>`, etc.), and the keyboard anchor. It clears
 that state if the row leaves that section or loses its last action; moving back
 or restoring eligibility does not reopen the menu. For future group commands,
