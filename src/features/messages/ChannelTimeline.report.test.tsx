@@ -28,10 +28,10 @@ import { ChannelTimeline } from "./ChannelTimeline";
 const view = vi.hoisted(() => ({
   visible: undefined as ReadonlySet<number> | undefined,
 }));
-vi.mock("virtua", async () => {
+vi.mock("./TimelineVirtualizer", async () => {
   const { Children, forwardRef, useImperativeHandle } = await import("react");
   return {
-    Virtualizer: forwardRef(function Virtualizer(
+    TimelineVirtualizer: forwardRef(function Virtualizer(
       {
         children,
         keepMounted = [],
