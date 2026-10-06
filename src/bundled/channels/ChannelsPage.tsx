@@ -368,9 +368,16 @@ function ChannelWorkspace({
         channels.find((item) => item.channelType !== "session"));
   // Sidebar routing can update the same mounted page. Keep its saved default
   // aligned with the resolved conversation, not only page-local clicks.
+  // Remember the routed channel before committing children, rather than
+  // committing the same conversation again just to update its fallback.
+  if (
+    navigation?.target.kind === "conversation" &&
+    current &&
+    selected !== current.id
+  )
+    setSelected(current.id);
   useEffect(() => {
     if (navigation?.target.kind !== "conversation" || !current) return;
-    setSelected(current.id);
     writeView(scope, "selected-channel", current.id);
   }, [navigation?.target, current, scope]);
   useEffect(() => {
