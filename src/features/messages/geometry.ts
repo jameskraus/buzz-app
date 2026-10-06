@@ -1,11 +1,11 @@
-import type { VirtualizerHandle } from "virtua";
+import type { TimelineVirtualizerHandle } from "./TimelineVirtualizer";
 import type { ChannelMessage, Profile } from "../relay/contracts";
 import type { ChannelQueries } from "../relay/contracts";
 
 type Entry = {
   signature: string;
   width: number;
-  cache: VirtualizerHandle["cache"];
+  cache: TimelineVirtualizerHandle["cache"];
 };
 /** Identity/session-scoped and bounded. Event content (not IDs alone) and exact layout width
  * invalidate measurements. Weak ownership releases geometry with the query session. */
@@ -24,7 +24,7 @@ export function geometryFor(queries: ChannelQueries) {
       channelId: string,
       signature: string,
       width: number,
-      cache: VirtualizerHandle["cache"],
+      cache: TimelineVirtualizerHandle["cache"],
     ) {
       entries.delete(channelId);
       // Signatures include rendered text; bound that memory too, not only view count.

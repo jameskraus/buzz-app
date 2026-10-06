@@ -17,10 +17,10 @@ import { readView, writeView } from "../../shared/view-state";
 // Real React lifecycle; only the virtualizer's imperative layout boundary is
 // modeled here. Browser journeys retain the actual same-message/4px contract.
 const scroll = vi.hoisted(() => ({ toIndex: vi.fn(), toOffset: vi.fn() }));
-vi.mock("virtua", async () => {
+vi.mock("./TimelineVirtualizer", async () => {
   const { forwardRef, useImperativeHandle } = await import("react");
   return {
-    Virtualizer: forwardRef(function Virtualizer(
+    TimelineVirtualizer: forwardRef(function Virtualizer(
       { children }: { children: ReactNode },
       ref,
     ) {

@@ -13,7 +13,10 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
-import { Virtualizer, type VirtualizerHandle } from "virtua";
+import {
+  TimelineVirtualizer,
+  type TimelineVirtualizerHandle,
+} from "./TimelineVirtualizer";
 import { MessageRow } from "./MessageRow";
 import { continuesMessageGroup } from "./message-grouping";
 import type { Attachment, ChannelWindow } from "../relay/contracts";
@@ -210,12 +213,12 @@ function Timeline({
   );
   const scroller = useRef<HTMLElement>(null);
   const edge = useRef<HTMLDivElement>(null);
-  const handle = useRef<VirtualizerHandle>(null);
+  const handle = useRef<TimelineVirtualizerHandle>(null);
   const [size, setSize] = useState({ width: 0, height: 0, edgeHeight: 0 });
   const width = size.width;
   const latest = useRef({ signature, width });
   latest.current = { signature, width };
-  const initialCache = useRef<VirtualizerHandle["cache"] | undefined>(
+  const initialCache = useRef<TimelineVirtualizerHandle["cache"] | undefined>(
     undefined,
   );
   const edges = useRef<{
@@ -268,7 +271,7 @@ function Timeline({
         )
       )
         restoredAnchor.current = undefined;
-      // Virtua can emit the restoration scroll before mounting its visible
+      // the virtualizer can emit the restoration scroll before mounting its visible
       // range. An anchorless observation must not erase the saved reading intent.
       // A reader gesture clears restoredAnchor before recording a new position.
       if (anchor && !position.anchor) return;
@@ -285,7 +288,7 @@ function Timeline({
         return;
       const previous = measuredPosition.current;
       // Reflow can move the offset twice: the browser clamps a shrinking list,
-      // then Virtua corrects its measured rows. That combined movement can exceed
+      // then the virtualizer corrects its measured rows. That combined movement can exceed
       // the height delta, so a contracting list is not evidence of reader input.
       // Explicit upward input wins even when shrink and reader movement share
       // one observation. A link-opening click is not directional scroll intent.
@@ -302,7 +305,7 @@ function Timeline({
       if (movedUp) upwardGesture.current = "moving";
       if (follow.current && !movedUp && (previous || !userScrolled.current))
         position.bottom = true;
-      // Restoration can scroll before Virtua measures rows beneath the anchor,
+      // Restoration can scroll before the virtualizer measures rows beneath the anchor,
       // briefly reaching the estimated bottom. Only reader input may follow.
       if (restoredAnchor.current) position.bottom = false;
       savedPosition.current = position;
@@ -446,7 +449,7 @@ function Timeline({
       pendingReveal.current = undefined;
     }
     // Row updates include edits/reactions/replies, not only new message IDs.
-    // Above-bottom reading and prepend anchoring remain Virtua's responsibility.
+    // Above-bottom reading and prepend anchoring remain the virtualizer's responsibility.
     const revealIndex =
       revealMessageId && revealed.current !== revealMessageId
         ? rows.findIndex(
@@ -497,7 +500,7 @@ function Timeline({
       userScrolled.current = false;
       upwardGesture.current = false;
     }
-    // virtua attaches its scroller in an effect; wait through the StrictMode probe.
+    // The virtualizer attaches its scroller in an effect; wait through the StrictMode probe.
     // A new gesture wins over restoration queued before that gesture.
     const scheduledIntent = intent.current;
     const restore =
@@ -547,14 +550,14 @@ function Timeline({
           return;
         }
         restorePosition();
-        // Width changes can measure after Virtua's imperative-scroll scheduler
+        // Width changes can measure after the virtualizer's imperative-scroll scheduler
         // expires. Retain the same reading anchor (or bottom intent) through
         // those late measurements, never through a new reader gesture.
         const list = scroller.current?.querySelector("ol");
         if (list) {
-          // Virtua measures children in ResizeObserver and synchronously writes
+          // the virtualizer measures children in ResizeObserver and synchronously writes
           // this parent height. Observing the parent box would create skipped
-          // resize notifications; watch only Virtua's committed height instead.
+          // resize notifications; watch only the virtualizer's committed height instead.
           let height = list.style.height;
           observer = new MutationObserver(() => {
             if (list.style.height === height) return;
@@ -710,7 +713,7 @@ function Timeline({
       tabIndex={0}
       aria-label="Channel message history"
       onScroll={(event) => {
-        // React may receive this event before Virtua updates its handle metrics.
+        // React may receive this event before the virtualizer updates its handle metrics.
         const element = event.currentTarget;
         const v = handle.current;
         if (
@@ -750,15 +753,11 @@ function Timeline({
         onClick={jumpToLatest}
       />
       {width > 0 && (
-        <Virtualizer
+        <TimelineVirtualizer
           ref={handle}
           scrollRef={scroller}
-          shift={prepend}
-          bufferSize={1600}
           // Reflow must not evict the focused control or a row's open report.
           keepMounted={keptIndices}
-          as="ol"
-          item="li"
           startMargin={size.edgeHeight}
           {...(initialCache.current ? { cache: initialCache.current } : {})}
         >
@@ -809,7 +808,7 @@ function Timeline({
               />
             );
           })}
-        </Virtualizer>
+        </TimelineVirtualizer>
       )}
       {!rows.length && !window.hasMore && (
         <p className={styles.empty}>No messages yet.</p>

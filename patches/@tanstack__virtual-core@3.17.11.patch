@@ -1,0 +1,89 @@
+diff --git a/dist/cjs/index.cjs b/dist/cjs/index.cjs
+index e51903870f7309d6f3ccf7b83e1de5eac5621d33..eb3993c33b827b45d01f37ce7c13967eb29e1d85 100644
+--- a/dist/cjs/index.cjs
++++ b/dist/cjs/index.cjs
+@@ -440,7 +440,21 @@ class Virtualizer {
+         } else {
+           this.targetWindow = ((_a = this.scrollElement) == null ? void 0 : _a.window) ?? null;
+         }
+-        this.elementsCache.forEach((cached) => {
++        // New reader input supersedes an imperative target awaiting measurements.
++      const cancelNavigation = () => {
++        this.scrollState = null;
++        if (this.rafId != null && this.targetWindow) {
++          this.targetWindow.cancelAnimationFrame(this.rafId);
++          this.rafId = null;
++        }
++      };
++      for (const type of ['wheel', 'touchmove', 'keydown', 'pointerdown']) {
++        this.scrollElement.addEventListener(type, cancelNavigation, { capture: true, passive: true });
++        const element = this.scrollElement;
++        this.unsubs.push(() => element.removeEventListener(type, cancelNavigation, true));
++      }
++
++      this.elementsCache.forEach((cached) => {
+           this.observer.observe(cached);
+         });
+         this.unsubs.push(
+@@ -1361,4 +1375,3 @@ exports.observeElementRect = observeElementRect;
+ exports.observeWindowOffset = observeWindowOffset;
+ exports.observeWindowRect = observeWindowRect;
+ exports.windowScroll = windowScroll;
+-//# sourceMappingURL=index.cjs.map
+diff --git a/dist/esm/index.js b/dist/esm/index.js
+index 7032b6620935720c3e079469132c083f4dc24e65..10f15e58e7169baab705cf44a75bf153929027e1 100644
+--- a/dist/esm/index.js
++++ b/dist/esm/index.js
+@@ -438,7 +438,21 @@ class Virtualizer {
+         } else {
+           this.targetWindow = ((_a = this.scrollElement) == null ? void 0 : _a.window) ?? null;
+         }
+-        this.elementsCache.forEach((cached) => {
++        // New reader input supersedes an imperative target awaiting measurements.
++      const cancelNavigation = () => {
++        this.scrollState = null;
++        if (this.rafId != null && this.targetWindow) {
++          this.targetWindow.cancelAnimationFrame(this.rafId);
++          this.rafId = null;
++        }
++      };
++      for (const type of ['wheel', 'touchmove', 'keydown', 'pointerdown']) {
++        this.scrollElement.addEventListener(type, cancelNavigation, { capture: true, passive: true });
++        const element = this.scrollElement;
++        this.unsubs.push(() => element.removeEventListener(type, cancelNavigation, true));
++      }
++
++      this.elementsCache.forEach((cached) => {
+           this.observer.observe(cached);
+         });
+         this.unsubs.push(
+@@ -1361,4 +1375,3 @@ export {
+   observeWindowRect,
+   windowScroll
+ };
+-//# sourceMappingURL=index.js.map
+diff --git a/src/index.ts b/src/index.ts
+index 38b7e426c7ddafbde85ba154ffc2325fafe4a545..1fc34cf796df71483e1d9332ddd0eac7e4a474a1 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -884,6 +884,20 @@ export class Virtualizer<
+         this.targetWindow = this.scrollElement?.window ?? null
+       }
+ 
++      // New reader input supersedes an imperative target awaiting measurements.
++      const cancelNavigation = () => {
++        this.scrollState = null;
++        if (this.rafId != null && this.targetWindow) {
++          this.targetWindow.cancelAnimationFrame(this.rafId);
++          this.rafId = null;
++        }
++      };
++      for (const type of ['wheel', 'touchmove', 'keydown', 'pointerdown']) {
++        this.scrollElement.addEventListener(type, cancelNavigation, { capture: true, passive: true });
++        const element = this.scrollElement;
++        this.unsubs.push(() => element.removeEventListener(type, cancelNavigation, true));
++      }
++
+       this.elementsCache.forEach((cached) => {
+         this.observer.observe(cached)
+       })

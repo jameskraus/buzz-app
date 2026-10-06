@@ -2,7 +2,7 @@ import { Button } from "../../shared/design-system/ui/Button";
 import { useReading } from "./use-reading";
 import { afterEach, expect, it, vi } from "vitest";
 import type { ReactElement } from "react";
-import { Virtualizer } from "virtua";
+import { TimelineVirtualizer as Virtualizer } from "./TimelineVirtualizer";
 import { ChannelTimeline } from "./ChannelTimeline";
 import { JumpToLatestButton } from "./JumpToLatestButton";
 import { createAgentLibrary } from "../agents/library";

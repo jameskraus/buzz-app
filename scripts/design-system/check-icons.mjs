@@ -69,7 +69,7 @@ const nonIconDependencies = new Set([
   "tailwindcss",
   "typescript",
   "undici",
-  "virtua",
+  "@tanstack/react-virtual",
   "vite",
   "vitest",
   "yaml",

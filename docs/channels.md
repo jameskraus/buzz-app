@@ -986,7 +986,7 @@ The port retains the prepared-store implementation and its behavior tests:
   coverage partial. Each scan is bounded to three roster-page reads plus at most
   eight 128-channel confirmation reads; metadata failure preserves successful
   membership evidence and earlier name batches.
-- Conventional top-down virtua timeline, prepend anchoring, near-bottom following,
+- Conventional top-down TanStack Virtual timeline, prepend anchoring, near-bottom following,
   and three cached geometries keyed by session, channel, content, profiles, and width.
 
 Connection generations and store epochs reject late results after disconnect,

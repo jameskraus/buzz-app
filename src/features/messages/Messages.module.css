@@ -26,16 +26,7 @@
   padding: 0 var(--space-panel-inset);
   /* Keep fractional last rows reachable despite integer scroll extents. */
   padding-bottom: var(--space-half);
-  /* The vendored Virtua patch (interruptMomentum in patches/virtua@0.51.0.patch)
-     flips this scroller to overflow-y: hidden !important on every nonzero size
-     correction on Mac WebKit. With classic, space-taking scrollbars that frame
-     removes the scrollbar, widens the content box, re-wraps rows above the
-     viewport, and their new heights feed the next correction. A stable gutter
-     keeps the inline size constant across the toggle. It reserves the thin
-     width because Chromium 121+ and WebKit from Safari 18.2 honour the standard
-     scrollbar-width/scrollbar-color (set here and by the global * rule in
-     shared/design-system/styles/scrollbars.css) and then ignore
-     ::-webkit-scrollbar, which is why .feed carries no such rules. */
+  /* Keep row wrapping stable during automatic Mac WebKit scroll corrections. */
   scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--text) 20%, transparent) transparent;
@@ -58,7 +49,7 @@
   padding: 0;
 }
 .edge {
-  /* ChannelTimeline measures this region for Virtua's pixel startMargin. */
+  /* ChannelTimeline measures this region for the virtualizer's pixel scroll margin. */
   height: 3.5rem;
   box-sizing: border-box;
   display: flex;

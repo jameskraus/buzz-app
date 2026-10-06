@@ -121,7 +121,7 @@ writeFileSync(lane + "-stdin", readFileSync(0));
 
 test("installed hook formats without rewriting borrowed dependencies or other work", (t) => {
   const dependencies = () =>
-    [".modules.yaml", "virtua/lib/index.js"].map((file) =>
+    [".modules.yaml", "@tanstack/react-virtual/dist/esm/index.js"].map((file) =>
       readFileSync(path.join(root, "node_modules", file), "utf8"),
     );
   const installed = dependencies();
